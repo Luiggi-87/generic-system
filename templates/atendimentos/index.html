@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}Atendimentos — {{ marca.nome }}{% endblock %}
+{% block page_title %}Atendimentos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('atendimentos.novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Atendimento
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Cliente</label>
+        <select name="cliente_id" class="form-select">
+          <option value="">Todos</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}" {% if cliente_id == c.id|string %}selected{% endif %}>{{ rotulo(c) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select">
+          <option value="">Todos</option>
+          <option value="agendado" {% if status=='agendado' %}selected{% endif %}>Agendado</option>
+          <option value="realizado" {% if status=='realizado' %}selected{% endif %}>Realizado</option>
+          <option value="cancelado" {% if status=='cancelado' %}selected{% endif %}>Cancelado</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">De</label>
+        <input type="date" name="data_de" class="form-control" value="{{ data_de }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Até</label>
+        <input type="date" name="data_ate" class="form-control" value="{{ data_ate }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-outline-primary w-100"><i class="bi bi-search me-1"></i>Filtrar</button>
+      </div>
+      {% if status or cliente_id or data_de or data_ate %}
+      <div class="col-md-1">
+        <a href="{{ url_for('atendimentos.index') }}" class="btn btn-outline-secondary w-100">✕</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">{{ atendimentos|length }} atendimento(s)</div>
+  <div class="card-body p-0">
+    {% if atendimentos %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Tipo</th><th>Procedimentos</th>{% if pode('financeiro') %}<th>Valor</th>{% endif %}<th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for a in atendimentos %}
+          <tr>
+            <td>{{ a.data_atendimento|data_br }}</td>
+            <td>{{ a.hora_atendimento or '—' }}</td>
+            <td>
+              <a href="{{ url_for('clientes.detail', id=a.cliente_id) }}" class="text-decoration-none fw-semibold">
+                {{ rotulo(a.cliente) }}
+              </a>
+            </td>
+            <td><span class="text-capitalize">{{ a.tipo }}</span></td>
+            <td>
+              {% for item in a.itens %}
+              <small class="d-block text-muted">{{ item.procedimento.nome }}</small>
+              {% else %}—
+              {% endfor %}
+            </td>
+            {% if pode('financeiro') %}<td>{{ a.valor_total|brl }}</td>{% endif %}
+            <td>
+              {% if a.status == 'agendado' %}<span class="badge bg-warning text-dark">Agendado</span>
+              {% elif a.status == 'realizado' %}<span class="badge bg-success">Realizado</span>
+              {% else %}<span class="badge bg-secondary">Cancelado</span>{% endif %}
+            </td>
+            <td class="d-flex gap-1">
+              <a href="{{ url_for('atendimentos.detail', id=a.id) }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% set tem_recebido = a.lancamentos | selectattr('status', 'in', ['recebido', 'pago']) | list | length > 0 %}
+              <form method="post" action="{{ url_for('atendimentos.excluir', id=a.id) }}" id="form-excluir-{{ a.id }}">
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                  onclick="confirmar('{% if tem_recebido %}Este atendimento possui lançamentos recebidos. Tudo será excluído. Confirmar?{% else %}Excluir atendimento de {{ a.cliente.nome }} ({{ a.data_atendimento|data_br }})?{% endif %}','form-excluir-{{ a.id }}')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-calendar-x" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhum atendimento encontrado.</p>
+      <a href="{{ url_for('atendimentos.novo') }}" class="btn btn-primary">Agendar Atendimento</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

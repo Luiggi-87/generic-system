@@ -1,0 +1,49 @@
+{% include '_marca_css.html' %}
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #222; background: var(--cm-bg); }
+  .page { max-width: 210mm; margin: 0 auto; padding: 12mm 14mm; background: #fff; }
+  .toolbar { max-width: 210mm; margin: 0 auto; padding: 10px 14mm; display: flex; flex-wrap: wrap;
+             gap: 8px; align-items: end; }
+  .toolbar label { font-size: 8pt; color: #666; display: block; }
+  .toolbar select, .toolbar input { padding: 5px 7px; border: 1px solid #ccc; border-radius: 5px; font-size: 10pt; }
+  .btn { background: var(--cm-primary-dark); color: #fff; border: none; padding: 7px 16px; border-radius: 6px;
+         font-size: 10pt; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.alt { background: #eee; color: #444; }
+  .voltar-linha { flex-basis: 100%; padding-bottom: 8px; margin-bottom: 2px; border-bottom: 1px solid var(--cm-accent); }
+  .btn.voltar { background: #4a148c; color: #fff; font-weight: bold; padding: 9px 20px; font-size: 11pt;
+                box-shadow: 0 2px 5px rgba(74,20,140,.35); }
+  .btn.voltar:hover { background: #38106b; }
+  .header { border-bottom: 3px solid var(--cm-primary-dark); padding-bottom: 8px; margin-bottom: 12px;
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .brand { color: var(--cm-primary-dark); font-size: 18pt; font-weight: bold; }
+  .sub { color: #888; font-size: 8pt; margin-top: 2px; }
+  .titulo { text-align: right; font-size: 13pt; font-weight: bold; color: #4a148c; }
+  .meta { text-align: right; font-size: 8pt; color: #888; margin-top: 3px; }
+  .section { margin-bottom: 16px; }
+  .section-title { font-size: 10pt; font-weight: bold; color: var(--cm-primary-dark); border-bottom: 1px solid var(--cm-accent);
+                   padding-bottom: 3px; margin-bottom: 7px; text-transform: uppercase; letter-spacing: .03em; }
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th { background: var(--cm-bg); color: #444; padding: 5px 7px; text-align: left; font-size: 7.5pt;
+       text-transform: uppercase; border-bottom: 1px solid #ddd; }
+  td { padding: 5px 7px; border-bottom: 1px solid #f0f0f0; }
+  .r { text-align: right; } .c { text-align: center; }
+  .tot td { border-top: 2px solid #ccc; font-weight: bold; background: #fafafa; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 16px; font-size: 9pt; }
+  .kv .v { text-align: right; font-weight: bold; }
+  .destaque { background: #e8f5e9; border-radius: 6px; padding: 9px 12px; display: flex;
+              justify-content: space-between; font-weight: bold; color: #1b5e20; margin-top: 8px; }
+  .aviso { background: #fff3e0; border-left: 4px solid #e65100; padding: 7px 10px; font-size: 9pt;
+           margin-bottom: 10px; }
+  .muted { color: #888; font-size: 8pt; }
+  .fw { font-weight: bold; }
+  .links a { margin-right: 10px; font-size: 9pt; color: var(--cm-primary-dark); }
+  .footer { margin-top: 16px; border-top: 1px solid #e0e0e0; padding-top: 6px; font-size: 7.5pt; color: #aaa;
+            display: flex; justify-content: space-between; }
+  @media print {
+    body { background: #fff; font-size: 9.5pt; }
+    .toolbar, .links, .no-print { display: none !important; }
+    .page { padding: 0; max-width: none; }
+    @page { size: A4; margin: 12mm; }
+  }
+</style>

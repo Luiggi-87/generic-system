@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block title %}Contas a Receber — {{ marca.nome }}{% endblock %}
+{% block page_title %}Contas a Receber{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('financeiro.novo_lancamento') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Nova Receita
+  </a>
+</div>
+
+<!-- Filtro status -->
+<div class="mb-3 d-flex gap-2">
+  <a href="?status=pendente" class="btn btn-sm {{ 'btn-warning' if status == 'pendente' else 'btn-outline-secondary' }}">Pendentes</a>
+  <a href="?status=recebido" class="btn btn-sm {{ 'btn-success' if status == 'recebido' else 'btn-outline-secondary' }}">Recebidos</a>
+  <a href="?status=" class="btn btn-sm {{ 'btn-primary' if not status else 'btn-outline-secondary' }}">Todos</a>
+</div>
+
+<!-- Totalizador -->
+<div class="row g-2 mb-3">
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between" style="background:#e8f5e9">
+      <span class="text-muted small fw-bold">TOTAL FILTRADO</span>
+      <span class="text-positivo fw-bold fs-5">{{ total|brl }}</span>
+    </div>
+  </div>
+  {% if vencidas > 0 %}
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between" style="background:#fdecea">
+      <span class="text-muted small fw-bold">VENCIDAS</span>
+      <span class="text-negativo fw-bold fs-5">{{ vencidas }} conta(s)</span>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if lancamentos %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Competência</th><th>Descrição</th><th>Cliente</th><th>Valor</th><th>Vencimento</th><th>Forma</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for l in lancamentos %}
+          <tr {% if l.vencido %}class="table-danger"{% endif %}>
+            <td class="text-muted small">{{ l.data_competencia|data_br }}</td>
+            <td>{{ l.descricao }}</td>
+            <td>{{ l.cliente.nome if l.cliente else '—' }}</td>
+            <td class="text-positivo fw-bold">{{ l.valor|brl }}</td>
+            <td>
+              {{ l.data_vencimento|data_br }}
+              {% if l.vencido %}<span class="badge badge-vencido ms-1">Vencido</span>{% endif %}
+            </td>
+            <td class="text-muted small text-capitalize">{{ l.forma_pagamento or '—' }}</td>
+            <td>
+              <span class="badge bg-{{ l.status_class }}">{{ l.status_label }}</span>
+              {% if l.data_pagamento %}<br><small class="text-muted">{{ l.data_pagamento|data_br }}</small>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                {% if l.status == 'pendente' %}
+                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                  data-bs-target="#modal-rec-{{ l.id }}" title="Receber">
+                  <i class="bi bi-cash-coin me-1"></i>Receber
+                </button>
+                {% endif %}
+                <a href="{{ url_for('financeiro.editar_lancamento', id=l.id) }}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhuma conta encontrada.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modais -->
+{% for l in lancamentos %}
+{% if l.status == 'pendente' %}
+<div class="modal fade" id="modal-rec-{{ l.id }}" tabindex="-1" data-valor="{{ l.valor }}">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Registrar Recebimento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('financeiro.registrar_pagamento', id=l.id) }}">
+        <div class="modal-body">
+          <p class="mb-1"><strong>{{ l.descricao }}</strong></p>
+          <p class="mb-2 fs-5 fw-bold text-positivo">Bruto: {{ l.valor|brl }}</p>
+          {% if l.cliente %}<p class="text-muted small mb-2">Cliente: {{ l.cliente.nome }}</p>{% endif %}
+          <div class="mb-3">
+            <label class="form-label">Data do Recebimento</label>
+            <input type="date" name="data_pagamento" class="form-control dp-hoje">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Forma de Pagamento</label>
+            <select name="forma_pagamento" class="form-select">
+              {% for v, lab in formas %}
+              <option value="{{ v }}" {% if l.forma_pagamento == v %}selected{% endif %}>{{ lab }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 div-operadora" style="display:none">
+            <label class="form-label">Operadora</label>
+            <select name="operadora" class="form-select">
+              {% for v, lab in operadoras_ativas %}
+              <option value="{{ v }}" {% if v == operadora_padrao_hoje %}selected{% endif %}>{{ lab }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 div-parcelas" style="display:none">
+            <label class="form-label">Parcelas</label>
+            <select name="parcelas" class="form-select">
+              <option value="1">1x — à vista</option>
+              {% for n in range(2, 13) %}
+              <option value="{{ n }}">{{ n }}x</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="taxa-info rounded p-2" style="display:none;background:var(--cm-bg);font-size:.88rem"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.dp-hoje').forEach(el => {
+  el.value = new Date().toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

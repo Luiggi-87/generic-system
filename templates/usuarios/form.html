@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar acesso' if usuario else 'Novo acesso' %}
+{% block title %}{{ titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% set d = dados %}
+<div class="card" style="max-width:820px">
+  <div class="card-body">
+    <form method="post">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Nome *</label>
+          <input type="text" name="nome" class="form-control" required value="{{ d.get('nome') or (usuario.nome if usuario) or '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">E-mail (usuário de acesso) *</label>
+          <input type="email" name="email" class="form-control" required value="{{ d.get('email') or (usuario.email if usuario) or '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">{{ 'Nova senha (deixe em branco para manter)' if usuario else 'Senha inicial *' }}</label>
+          <input type="text" name="senha" class="form-control" autocomplete="off" minlength="8" {% if not usuario %}required{% endif %}
+                 placeholder="mínimo 8 caracteres">
+          <div class="form-text">Informe por um meio seguro; a pessoa troca depois no ícone de chave ao lado de "Sair".</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Prestadora de serviço vinculada (opcional)</label>
+          <select name="funcionario_id" class="form-select">
+            <option value="">— Nenhuma —</option>
+            {% for f in funcionarias %}
+            <option value="{{ f.id }}" {% if (d.get('funcionario_id') or (usuario.funcionario_id if usuario)) == f.id %}selected{% endif %}>{{ f.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Perfil</label>
+          {% set perfil = d.get('perfil') or 'funcionario' %}
+          <div class="d-flex flex-wrap gap-4">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="perfil" id="perfil-func" value="funcionario" {% if perfil != 'admin' %}checked{% endif %}>
+              <label class="form-check-label" for="perfil-func"><strong>Prestadora de serviço</strong> — vê só as áreas marcadas abaixo, o próprio repasse e envia as próprias notas fiscais (vincule a prestadora de serviço)</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="perfil" id="perfil-contab" value="contabilidade" {% if perfil == 'contabilidade' %}checked{% endif %}>
+              <label class="form-check-label" for="perfil-contab"><strong>Contabilidade</strong> — contador: só consulta dos repasses de todos e do ISS do mês (notas emitidas)</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="perfil" id="perfil-admin" value="admin" {% if perfil == 'admin' %}checked{% endif %}>
+              <label class="form-check-label" for="perfil-admin"><strong>Administradora</strong> — acessa tudo e gerencia usuários</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12" id="bloco-areas">
+          <div class="border rounded p-3 bg-light">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+              <strong>O que esta pessoa pode ver e usar</strong>
+              <div class="d-flex flex-wrap gap-1">
+                {% for nome, chaves in perfis_prontos %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="{{ chaves|join(',') }}">{{ nome }}</button>
+                {% endfor %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="*">Marcar tudo</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-preset="">Limpar</button>
+              </div>
+            </div>
+            <div class="row g-2">
+              {% for chave, nome, desc, _rota in areas if chave != 'notas_funcionarias' %}
+              <div class="col-md-6">
+                <div class="form-check">
+                  <input class="form-check-input area-ck" type="checkbox" name="areas" value="{{ chave }}" id="area-{{ chave }}"
+                         {% if chave in (d.get('areas') or []) %}checked{% endif %}>
+                  <label class="form-check-label" for="area-{{ chave }}"><strong>{{ nome }}</strong><br><small class="text-muted">{{ desc }}</small></label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="form-text mt-2">
+              "Financeiro" libera também os valores e alertas de dinheiro no painel inicial. Sem essa área, o painel mostra só gestantes e atendimentos.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        <a href="{{ url_for('usuarios.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+  var admin = document.getElementById('perfil-admin'), func = document.getElementById('perfil-func'), contab = document.getElementById('perfil-contab'),
+      bloco = document.getElementById('bloco-areas'), cks = document.querySelectorAll('.area-ck'),
+      areasContab = {{ areas_contabilidade|tojson }}, areasFunc = {{ areas_funcionaria|tojson }};
+  function atualiza() { bloco.style.display = admin.checked ? 'none' : ''; }
+  admin.addEventListener('change', atualiza); func.addEventListener('change', atualiza); atualiza();
+  // ao escolher Prestadora de serviço, já marca o relatório de faturamento (o próprio repasse) e as notas fiscais dela
+  func.addEventListener('change', function () {
+    if (func.checked) cks.forEach(function (c) { c.checked = areasFunc.indexOf(c.value) >= 0; });
+  });
+  // ao escolher Contabilidade, já marca as áreas do contador (a administradora pode ajustar)
+  contab.addEventListener('change', function () {
+    if (contab.checked) cks.forEach(function (c) { c.checked = areasContab.indexOf(c.value) >= 0; });
+    atualiza();
+  });
+  document.querySelectorAll('[data-preset]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var p = b.dataset.preset, lista = p === '*' ? null : p.split(',');
+      cks.forEach(function (c) { c.checked = lista === null ? true : lista.indexOf(c.value) >= 0; });
+    });
+  });
+})();
+</script>
+{% endblock %}

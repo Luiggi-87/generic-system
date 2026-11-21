@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar Plano' if plano else 'Novo Plano' %}
+{% block title %}{{ titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% set fd = form_data %}
+{% set p  = plano %}
+
+<div class="row justify-content-center">
+<div class="col-lg-8">
+<div class="card">
+  <div class="card-body">
+    <form method="post" id="form-plano">
+
+      <!-- ── DADOS DO PLANO ─────────────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-file-earmark-medical me-2"></i>Dados do Plano</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-8">
+          <label class="form-label">Nome do Plano *</label>
+          <input type="text" name="nome" class="form-control" required
+            placeholder="Ex: Seguimento Rede Privada"
+            value="{{ fd.get('nome') or (p.nome if p) or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Status</label>
+          <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" name="ativo" id="ativo"
+              {% if not p or p.ativo %}checked{% endif %}>
+            <label class="form-check-label" for="ativo">Plano ativo</label>
+          </div>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Descrição / Observação</label>
+          <textarea name="descricao" class="form-control" rows="2"
+            placeholder="Ex: Indicado para gestantes na rede privada de saúde…">{{ fd.get('descricao') or (p.descricao if p) or '' }}</textarea>
+        </div>
+      </div>
+
+      <!-- ── VALOR E PARCELAMENTO ───────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-cash-coin me-2"></i>Valor e Parcelamento</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <label class="form-label">Valor do Contrato (R$) *</label>
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="number" name="valor" class="form-control" step="0.01" min="0" required
+              placeholder="0,00"
+              value="{{ fd.get('valor') or (p.valor if p) or '' }}">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Parcelas sem taxa adicional</label>
+          <div class="input-group">
+            <input type="number" name="parcelas_sem_taxa" class="form-control" min="1" max="18"
+              value="{{ fd.get('parcelas_sem_taxa') or (p.parcelas_sem_taxa if p) or 3 }}">
+            <span class="input-group-text">×</span>
+          </div>
+          <div class="form-text">Informação para exibição. Ex: "até 3× sem taxa".</div>
+        </div>
+      </div>
+
+      <!-- ── SERVIÇOS INCLUSOS ──────────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-check-circle me-2"></i>Serviços Inclusos</p>
+      <div class="mb-2">
+        <div class="text-muted small mb-3">
+          Liste os serviços que fazem parte deste plano. Use os botões + e × para adicionar/remover.
+        </div>
+
+        <table class="table table-sm" id="tabela-servicos">
+          <thead>
+            <tr>
+              <th style="width:45%">Serviço</th>
+              <th style="width:12%">Qtd</th>
+              <th>Descrição / Detalhe</th>
+              <th style="width:60px"></th>
+            </tr>
+          </thead>
+          <tbody id="itens-body">
+            {% if p and p.itens %}
+              {% for item in p.itens %}
+              <tr class="item-row">
+                <td>
+                  <input type="text" name="servico[]" class="form-control form-control-sm"
+                    value="{{ item.servico }}" placeholder="Ex: Consulta pré-natal" required>
+                </td>
+                <td>
+                  <input type="number" name="quantidade[]" class="form-control form-control-sm"
+                    value="{{ item.quantidade }}" min="1" max="99">
+                </td>
+                <td>
+                  <input type="text" name="descricao_item[]" class="form-control form-control-sm"
+                    value="{{ item.descricao or '' }}" placeholder="Detalhe opcional">
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-sm btn-outline-danger btn-remover">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <!-- 3 linhas padrão para novos planos -->
+              <tr class="item-row">
+                <td><input type="text" name="servico[]" class="form-control form-control-sm" value="Consulta de pré-natal" required></td>
+                <td><input type="number" name="quantidade[]" class="form-control form-control-sm" value="2" min="1" max="99"></td>
+                <td><input type="text" name="descricao_item[]" class="form-control form-control-sm" placeholder="Detalhe opcional"></td>
+                <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover"><i class="bi bi-x-lg"></i></button></td>
+              </tr>
+              <tr class="item-row">
+                <td><input type="text" name="servico[]" class="form-control form-control-sm" value="Assistência ao parto" required></td>
+                <td><input type="number" name="quantidade[]" class="form-control form-control-sm" value="1" min="1" max="99"></td>
+                <td><input type="text" name="descricao_item[]" class="form-control form-control-sm" placeholder="Detalhe opcional"></td>
+                <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover"><i class="bi bi-x-lg"></i></button></td>
+              </tr>
+              <tr class="item-row">
+                <td><input type="text" name="servico[]" class="form-control form-control-sm" value="Consulta pós-parto" required></td>
+                <td><input type="number" name="quantidade[]" class="form-control form-control-sm" value="1" min="1" max="99"></td>
+                <td><input type="text" name="descricao_item[]" class="form-control form-control-sm" placeholder="Detalhe opcional"></td>
+                <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover"><i class="bi bi-x-lg"></i></button></td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-item">
+          <i class="bi bi-plus-lg me-1"></i>Adicionar serviço
+        </button>
+      </div>
+
+      <!-- ── BOTÕES ─────────────────────────────────────────────────── -->
+      <hr class="my-4">
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>Salvar Plano
+        </button>
+        <a href="{{ url_for('planos.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+
+    </form>
+  </div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Adicionar linha de serviço ────────────────────────────────────────────
+document.getElementById('btn-add-item').addEventListener('click', function () {
+  const tbody = document.getElementById('itens-body');
+  const tr = document.createElement('tr');
+  tr.className = 'item-row';
+  tr.innerHTML = `
+    <td><input type="text" name="servico[]" class="form-control form-control-sm" placeholder="Ex: Consultoria de amamentação" required></td>
+    <td><input type="number" name="quantidade[]" class="form-control form-control-sm" value="1" min="1" max="99"></td>
+    <td><input type="text" name="descricao_item[]" class="form-control form-control-sm" placeholder="Detalhe opcional"></td>
+    <td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover"><i class="bi bi-x-lg"></i></button></td>
+  `;
+  tbody.appendChild(tr);
+  tr.querySelector('input[name="servico[]"]').focus();
+});
+
+// ── Remover linha ─────────────────────────────────────────────────────────
+document.getElementById('itens-body').addEventListener('click', function (e) {
+  const btn = e.target.closest('.btn-remover');
+  if (!btn) return;
+  const rows = document.querySelectorAll('#itens-body .item-row');
+  if (rows.length <= 1) {
+    alert('O plano precisa ter pelo menos 1 serviço.');
+    return;
+  }
+  btn.closest('tr').remove();
+});
+</script>
+{% endblock %}

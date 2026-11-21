@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Nova Folha — {{ marca.nome }}{% endblock %}
+{% block page_title %}Nova Folha de Pagamento{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Escolher Período</div>
+      <div class="card-body">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">Mês</label>
+            <select name="mes" class="form-select" required>
+              {% for m, nome in [
+                (1,'Janeiro'),(2,'Fevereiro'),(3,'Março'),(4,'Abril'),
+                (5,'Maio'),(6,'Junho'),(7,'Julho'),(8,'Agosto'),
+                (9,'Setembro'),(10,'Outubro'),(11,'Novembro'),(12,'Dezembro')
+              ] %}
+              <option value="{{ m }}" {% if m == mes_atual %}selected{% endif %}>{{ nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="form-label">Ano</label>
+            <input type="number" name="ano" class="form-control"
+                   value="{{ ano_atual }}" min="2020" max="2099" required>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-fill">
+              <i class="bi bi-plus-lg me-1"></i>Criar Folha
+            </button>
+            <a href="{{ url_for('folha.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {% if funcionarios_ativos %}
+    <div class="card mt-3">
+      <div class="card-header" style="font-size:.85rem;font-weight:700">
+        <i class="bi bi-people-fill me-1" style="color:var(--cm-primary)"></i>
+        Prestadoras de serviço que entrarão na folha ({{ funcionarios_ativos|length }} ativas)
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for f in funcionarios_ativos %}
+        <li class="list-group-item py-1 d-flex justify-content-between align-items-center" style="font-size:.85rem">
+          <span>{{ f.nome }}</span>
+          <span class="text-muted small">{{ f.cargo or '' }} · desc {{ (f.taxa_desconto*100)|round(1) }}%</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
+    <div class="alert alert-warning mt-3">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>Nenhuma prestadora de serviço ativa.</strong>
+      <a href="{{ url_for('folha.funcionarios') }}" class="alert-link ms-1">Cadastrar prestadoras de serviço</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

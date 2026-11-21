@@ -1,0 +1,886 @@
+{% extends 'base.html' %}
+{% block title %}Folha {{ periodo.titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}Folha — {{ periodo.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.tag{display:inline-flex;align-items:center;gap:3px;font-size:.72rem;padding:2px 8px;border-radius:10px;white-space:nowrap;font-weight:500;line-height:1.6}
+.tag-parto  {background:#e3f2fd;color:#0c447c}
+.tag-aeo    {background:#e8f5e9;color:#1b5e20}
+.tag-amam   {background:var(--cm-accent);color:var(--cm-primary-dark)}
+.tag-laser  {background:#f3e5f5;color:#6a1b9a}
+.tag-curso  {background:#fff8e1;color:#854f0b}
+.tag-brinco {background:#e8eaf6;color:#283593}
+.tag-func   {background:#e3f2fd;color:#1565c0;border:0.5px solid #bbdefb}
+.tag-rat    {background:#f1effe;color:#3c3489;border:0.5px solid #d4cafd}
+.rec-grid   {display:grid;grid-template-columns:92px 1fr 112px 36px;align-items:center}
+.rec-row    {padding:8px 14px;border-bottom:1px solid var(--bs-border-color,#dee2e6)}
+.rec-row:last-child{border-bottom:none}
+.rec-th     {font-size:.72rem;font-weight:600;color:var(--bs-secondary-color,#6c757d);text-transform:uppercase;letter-spacing:.04em}
+.pstat      {display:flex;flex-direction:column;align-items:center;padding:0 14px;border-right:1px solid var(--bs-border-color,#dee2e6)}
+.pstat:last-child{border-right:none}
+.pstat .n   {font-size:1.15rem;font-weight:500;line-height:1.2}
+.pstat .l   {font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <a href="{{ url_for('folha.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+  <div class="text-muted small">
+    {% if calc.taxa_diurna > 0 %}
+    Taxa Diurna: <strong>{{ calc.taxa_diurna|brl }}/h</strong>
+    &nbsp;·&nbsp;
+    Taxa Noturna: <strong>{{ calc.taxa_noturna|brl }}/h</strong>
+    &nbsp;·&nbsp;
+    <span style="color:#2e7d32">{{ calc.horas_eq|round(1) }}h eq.</span>
+    {% else %}
+    <span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Lance as receitas e as horas das prestadoras de serviço para calcular</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- KPI cards -->
+<div class="row g-2 mb-4">
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between align-items-center" style="background:#e8f5e9">
+      <div>
+        <div class="text-muted small fw-bold">RECEITAS DO PERÍODO</div>
+        <div class="text-positivo fw-bold fs-4">{{ calc.total_receita|brl }}</div>
+        <div class="text-muted" style="font-size:.78rem">
+          {{ periodo.receitas|length }} entrada(s) · {{ calc.horas_eq|round(1) }}h equivalentes
+        </div>
+      </div>
+      <i class="bi bi-arrow-down-circle text-success opacity-25" style="font-size:2.2rem"></i>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between align-items-center" style="background:#fff3e0">
+      <div>
+        <div class="text-muted small fw-bold">TOTAL BRUTO A DISTRIBUIR</div>
+        <div class="fw-bold fs-4" style="color:#e65100">{{ calc.total_bruto|brl }}</div>
+        <div class="text-muted" style="font-size:.78rem">
+          {{ periodo.escalas|length }} prestadora de serviço(s)
+          {% if calc.total_receita > 0 and (calc.total_bruto - calc.total_receita)|abs < 0.02 %}
+          · <span style="color:#2e7d32">100% distribuído</span>
+          {% endif %}
+        </div>
+      </div>
+      <i class="bi bi-people opacity-25" style="font-size:2.2rem;color:#ef6c00"></i>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between align-items-center" style="background:#ede7f6">
+      <div>
+        <div class="text-muted small fw-bold">TOTAL LÍQUIDO (REPASSE)</div>
+        <div class="fw-bold fs-4" style="color:#4527a0">{{ calc.total_liquido|brl }}</div>
+        <div class="text-muted" style="font-size:.78rem">{{ 'Despesas do mês rateadas' if calc.rateio_custos is not none else 'Desconto' }}: {{ calc.total_desconto_val|brl }}</div>
+      </div>
+      <i class="bi bi-cash-stack opacity-25" style="font-size:2.2rem;color:var(--cm-secondary)"></i>
+    </div>
+  </div>
+</div>
+
+<!-- ── RECEITAS (largura total) ─────────────────────────────────────── -->
+<div class="card mb-3" id="receitas">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-check me-1"></i>Receitas do Período</span>
+    <span class="d-flex align-items-center gap-2">
+      {% if periodo.status != 'fechado' and receitas_sorted %}
+      <form method="post" action="{{ url_for('folha.sincronizar_receitas', id=periodo.id) }}" class="d-inline">
+        <button class="btn btn-sm btn-outline-primary"
+                title="Refaz o valor de parto de cada cliente a partir dos lançamentos atuais"
+                onclick="return confirm('Atualizar os valores de parto desta folha com os lançamentos atuais?')">
+          <i class="bi bi-arrow-repeat me-1"></i>Atualizar pelos lançamentos
+        </button>
+      </form>
+      {% endif %}
+      <span class="badge bg-success">{{ calc.total_receita|brl }}</span>
+    </span>
+  </div>
+
+  <!-- Cabeçalho da grelha -->
+  <div class="rec-grid rec-row py-2" style="background:var(--bs-tertiary-bg,#f8f9fa)">
+    <span class="rec-th ps-0">Data</span>
+    <span class="rec-th">Cliente / Serviços</span>
+    <span class="rec-th text-end">Total</span>
+    <span></span>
+  </div>
+
+  {% if receitas_sorted %}
+    {% for r in receitas_sorted %}
+    <div class="rec-grid rec-row">
+      <span class="text-muted" style="font-size:.78rem">{{ r.data|data_br }}</span>
+      <div>
+        <div class="fw-semibold small mb-1">{{ r.cliente_nome or '—' }}</div>
+        <div class="d-flex flex-wrap gap-1">
+          {% if r.parto %}       <span class="tag tag-parto">Parto {{ r.parto|brl }}</span>{% endif %}
+          {% if r.aeo %}         <span class="tag tag-aeo">AEO {{ r.aeo|brl }}</span>{% endif %}
+          {% if r.amamentacao %} <span class="tag tag-amam">Amamentação {{ r.amamentacao|brl }}</span>{% endif %}
+          {% if r.laser %}       <span class="tag tag-laser">Laser {{ r.laser|brl }}</span>{% endif %}
+          {% if r.curso %}       <span class="tag tag-curso">Curso {{ r.curso|brl }}</span>{% endif %}
+          {% if r.brinco %}      <span class="tag tag-brinco">Brinco {{ r.brinco|brl }}</span>{% endif %}
+          {% if r.funcionario %}
+            <span class="tag tag-func"><i class="bi bi-person-fill me-1"></i>{{ r.funcionario.nome.split()[0] }}</span>
+          {% else %}
+            <span class="tag tag-rat"><i class="bi bi-people me-1"></i>Rateio</span>
+          {% endif %}
+        </div>
+        {% if r.detalhes_list %}
+        <div class="text-muted small mt-2" style="font-size:.75rem;border-top:1px solid #e0e0e0;padding-top:6px">
+          {% for detalhe in r.detalhes_list %}
+          <div>{{ detalhe.data|data_br }} — {{ detalhe.valor|brl }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <span class="text-positivo fw-bold text-end" style="font-size:.88rem">{{ r.total|brl }}</span>
+      <div>
+        {% if periodo.status == 'fechado' %}
+        <span class="text-muted" title="Folha fechada — receita protegida"><i class="bi bi-lock-fill"></i></span>
+        {% else %}
+        <form method="post" action="{{ url_for('folha.excluir_receita', rid=r.id) }}" id="del-r-{{ r.id }}">
+          <button type="button" class="btn btn-sm btn-outline-danger"
+            onclick="confirmar('Excluir esta receita?','del-r-{{ r.id }}')">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Rodapé total -->
+    <div class="rec-grid py-2 px-3" style="background:var(--bs-tertiary-bg,#f8f9fa);border-top:1px solid var(--bs-border-color,#dee2e6)">
+      <span class="rec-th">Total</span>
+      <span></span>
+      <span class="fw-bold text-positivo text-end" style="font-size:.88rem">{{ calc.total_receita|brl }}</span>
+      <span></span>
+    </div>
+  {% else %}
+  <div class="text-center text-muted py-3">Nenhuma receita lançada neste período.</div>
+  {% endif %}
+
+  <!-- Atendimentos pendentes -->
+  {% if atendimentos_pendentes %}
+  <div style="border-top:1px solid var(--bs-border-color,#dee2e6);padding:12px 14px;background:#e8f5e9;border-left:3px solid #2e7d32">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi bi-clipboard2-pulse" style="color:#2e7d32"></i>
+      <span class="fw-bold small" style="color:#1b5e20;text-transform:uppercase;letter-spacing:.04em">
+        Atendimentos de {{ periodo.mes_nome|upper }}/{{ periodo.ano }} — Pendentes de Lançamento
+      </span>
+      <span class="badge bg-success">{{ atendimentos_pendentes|length }}</span>
+    </div>
+    <div class="text-muted small mb-3">
+      Atendimentos realizados neste mês, com valor, que ainda não estão nas receitas da folha. Se o atendimento foi
+      direcionado a uma prestadora de serviço, a receita fica só com ela; senão, entra no rateio.
+    </div>
+    <div class="d-flex flex-column gap-2">
+      {% for ap in atendimentos_pendentes %}
+      {% set a = ap.atendimento %}
+      <div class="d-flex align-items-center gap-3 rounded px-3 py-2" style="background:var(--bs-body-bg,#fff);border:1px solid #c8e6c9">
+        <div class="flex-fill">
+          <div class="fw-semibold small">{{ a.cliente.nome }}</div>
+          <div class="text-muted" style="font-size:.75rem">
+            <i class="bi bi-calendar-check me-1"></i>{{ a.data_atendimento|data_br }}
+            · {% if a.funcionario %}<strong>somente {{ a.funcionario.nome }}</strong>{% else %}rateio{% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('folha.importar_atendimento', id=periodo.id) }}" class="d-flex align-items-center gap-2">
+          <input type="hidden" name="atendimento_id" value="{{ a.id }}">
+          <select name="categoria" class="form-select form-select-sm" style="width:auto">
+            {% for v, l in categorias_folha %}<option value="{{ v }}" {% if v == ap.categoria %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select>
+          <span class="text-muted small">R$</span>
+          <input type="number" name="valor" class="form-control form-control-sm text-end" step="0.01" min="0"
+                 value="{{ '%.2f'|format(a.valor_total or 0) }}" style="width:110px">
+          <button class="btn btn-sm btn-success text-nowrap"><i class="bi bi-plus-lg me-1"></i>Adicionar à Folha</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Partos pendentes -->
+  {% if partos_pendentes %}
+  <div style="border-top:1px solid var(--bs-border-color,#dee2e6);padding:12px 14px;background:#fffde7;border-left:3px solid #f9a825">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi bi-stars" style="color:#f57f17"></i>
+      <span class="fw-bold small" style="color:#e65100;text-transform:uppercase;letter-spacing:.04em">
+        Partos de {{ periodo.mes_nome|upper }}/{{ periodo.ano }} — Pendentes de Lançamento
+      </span>
+      <span class="badge bg-warning text-dark">{{ partos_pendentes|length }}</span>
+    </div>
+    <div class="text-muted small mb-3">
+      As pacientes abaixo tiveram o parto registrado neste mês e ainda não foram
+      incluídas nas receitas da folha. O valor sugerido é o líquido do contrato (já descontada a taxa da operadora).
+    </div>
+    <div class="d-flex flex-column gap-2">
+      {% for pp in partos_pendentes %}
+      <div class="d-flex align-items-center gap-3 rounded px-3 py-2"
+           style="background:var(--bs-body-bg,#fff);border:1px solid #f9e4a0">
+        <div class="flex-fill">
+          <div class="fw-semibold small">{{ rotulo(pp.cliente) }}
+            {% if pp.tardio_de %}<span class="badge bg-info text-dark ms-1" style="font-size:.68rem">complemento · folha de {{ pp.tardio_de }} já fechada</span>{% endif %}
+          </div>
+          <div class="text-muted" style="font-size:.75rem">
+            <i class="bi bi-calendar-check me-1"></i>Parto: {{ pp.cliente.data_parto|data_br }}
+            {% if pp.lancamento and pp.lancamento.forma_pagamento %}
+              · {{ formas_nomes.get(pp.lancamento.forma_pagamento, pp.lancamento.forma_pagamento) }}
+            {% endif %}
+          </div>
+        </div>
+        <form method="post" action="{{ url_for('folha.importar_parto', id=periodo.id) }}"
+              class="d-flex align-items-center gap-2">
+          <input type="hidden" name="cliente_id" value="{{ pp.cliente.id }}">
+          <span class="text-muted small">Valor Parto: R$</span>
+          <input type="number" name="valor"
+                 class="form-control form-control-sm text-end"
+                 step="0.01" min="0"
+                 value="{{ '%.2f'|format(pp.valor_sugerido) }}"
+                 style="width:110px">
+          <button type="submit" class="btn btn-sm btn-warning fw-bold text-nowrap">
+            <i class="bi bi-plus-lg me-1"></i>Adicionar à Folha
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if partos_tardios %}
+  <!-- Partos registrados depois do fechamento -->
+  <div style="border-top:1px solid var(--bs-border-color,#dee2e6);padding:12px 14px;background:#e8f4fd;border-left:3px solid #0d6efd">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi bi-clock-history text-primary"></i>
+      <span class="fw-bold small text-primary" style="text-transform:uppercase;letter-spacing:.04em">
+        Partos registrados depois do fechamento — repasse ainda não pago
+      </span>
+      <span class="badge bg-primary">{{ partos_tardios|length }}</span>
+    </div>
+    <div class="text-muted small mb-2">
+      Esta folha está fechada e não muda. O repasse destes partos será pago como <strong>complemento na folha do mês seguinte</strong>:
+      eles aparecem lá, na lista de partos pendentes, para serem adicionados.
+    </div>
+    {% for pp in partos_tardios %}
+    <div class="d-flex justify-content-between small py-1" style="border-top:1px dashed #b6d4f0">
+      <span>{{ rotulo(pp.cliente) }} · parto {{ pp.cliente.data_parto|data_br }}</span>
+      <span class="text-muted">contrato {{ pp.valor_sugerido|brl }} · repasse estimado <strong>{{ pp.repasse|brl }}</strong></span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Formulário de adição manual -->
+  <div style="border-top:1px solid var(--bs-border-color,#dee2e6);padding:12px 14px;background:var(--bs-tertiary-bg,#f8f9fa)">
+    <div class="text-muted small fw-bold mb-2" style="text-transform:uppercase;letter-spacing:.04em">
+      Adicionar Receita Manualmente
+    </div>
+    {% if periodo.status == 'fechado' %}
+    <div class="alert alert-secondary py-2 px-3 mb-0 d-flex gap-2 align-items-center" style="font-size:.82rem">
+      <i class="bi bi-lock-fill flex-shrink-0"></i>
+      <span>Folha fechada. Não é possível adicionar novas receitas após o registro dos pagamentos.</span>
+    </div>
+    {% else %}
+    <div class="alert alert-warning py-2 px-3 mb-3 d-flex gap-2 align-items-start" style="font-size:.82rem;border-left:4px solid #f59e0b">
+      <i class="bi bi-exclamation-triangle-fill text-warning mt-1 flex-shrink-0"></i>
+      <div>
+        <strong>Somente para cálculo de rateio.</strong>
+        Receitas adicionadas aqui servem exclusivamente para distribuir o valor entre as prestadoras de serviço.
+        Elas <strong>não aparecem</strong> no Fluxo de Caixa nem no DRE.
+        Se essa receita ainda não está registrada financeiramente, acesse
+        <a href="{{ url_for('financeiro.lancamentos') }}" target="_blank" class="alert-link">Financeiro → Lançamentos</a>.
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('folha.nova_receita', id=periodo.id) }}" id="form-nova-receita">
+      <input type="hidden" name="funcionario_id" id="hidden-funcionario-id" value="">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-2">
+          <label class="form-label small mb-1">Data</label>
+          <input type="date" name="data" class="form-control form-control-sm dp-hoje">
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label small mb-1">Cliente</label>
+          <input type="text" name="cliente_nome" class="form-control form-control-sm" placeholder="Nome do cliente">
+        </div>
+        <div class="col-6 col-sm-1">
+          <label class="form-label small mb-1" style="color:#0c447c">Parto</label>
+          <input type="number" name="parto" class="form-control form-control-sm" step="0.01" min="0" placeholder="0,00" style="border-color:#90caf9">
+        </div>
+        <div class="col-6 col-sm-1">
+          <label class="form-label small mb-1" style="color:#1b5e20">AEO</label>
+          <input type="number" name="aeo" class="form-control form-control-sm" step="0.01" min="0" placeholder="0,00" style="border-color:#a5d6a7">
+        </div>
+        <div class="col-6 col-sm-1">
+          <label class="form-label small mb-1" style="color:var(--cm-primary-dark)">Amam.</label>
+          <input type="number" name="amamentacao" class="form-control form-control-sm" step="0.01" min="0" placeholder="0,00" style="border-color:var(--cm-accent)">
+        </div>
+        <div class="col-6 col-sm-1">
+          <label class="form-label small mb-1" style="color:#6a1b9a">Laser</label>
+          <input type="number" name="laser" class="form-control form-control-sm" step="0.01" min="0" placeholder="0,00" style="border-color:#ce93d8">
+        </div>
+        <div class="col-6 col-sm-1">
+          <label class="form-label small mb-1" style="color:#854f0b">Curso</label>
+          <input type="number" name="curso" class="form-control form-control-sm" step="0.01" min="0" placeholder="0,00" style="border-color:#ffe082">
+        </div>
+        <div class="col-6 col-sm-1">
+          <label class="form-label small mb-1" style="color:#283593">Brinco</label>
+          <input type="number" name="brinco" class="form-control form-control-sm" step="0.01" min="0" placeholder="0,00" style="border-color:#9fa8da">
+        </div>
+        <div class="col-sm-1">
+          <button type="button" class="btn btn-sm btn-primary w-100" id="btn-add-receita"
+                  data-bs-toggle="modal" data-bs-target="#modal-destino-receita">
+            <i class="bi bi-plus-lg"></i>
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Modal destino da receita -->
+    <div class="modal fade" id="modal-destino-receita" tabindex="-1">
+      <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+          <div class="modal-header py-2" style="background:#f3e5f5">
+            <h6 class="modal-title" style="color:#6a1b9a">
+              <i class="bi bi-people me-1"></i>Destino da Receita
+            </h6>
+            <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body py-3">
+            <p class="small text-muted mb-3">Como este valor deve ser distribuído?</p>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="destino_tipo" id="destino-rateio" value="rateio" checked>
+              <label class="form-check-label" for="destino-rateio">
+                <i class="bi bi-people me-1 text-muted"></i>Ratear entre todas as prestadoras de serviço
+              </label>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="radio" name="destino_tipo" id="destino-especifica" value="especifica">
+              <label class="form-check-label" for="destino-especifica">
+                <i class="bi bi-person me-1 text-muted"></i>Direcionar a uma prestadora de serviço
+              </label>
+            </div>
+            <div id="div-select-func" style="display:none">
+              <select id="select-func" class="form-select form-select-sm">
+                <option value="">— Selecione a prestadora de serviço —</option>
+                {% for res in calc.resultados %}
+                <option value="{{ res.funcionario.id }}">{{ res.funcionario.nome }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer py-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-confirmar-destino">
+              <i class="bi bi-check-lg me-1"></i>Adicionar Receita
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── PARÂMETROS (barra horizontal) ──────────────────────────────────── -->
+<div class="card mb-3" id="parametros">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-sliders me-1"></i>Parâmetros do Período</span>
+    <form method="post" action="{{ url_for('folha.salvar_parametros', id=periodo.id) }}"
+          class="d-flex align-items-center gap-2">
+      <label class="text-muted small mb-0 text-nowrap">Dias no mês:</label>
+      <input type="number" name="total_dias" class="form-control form-control-sm"
+             value="{{ periodo.total_dias }}" min="28" max="31" style="width:70px">
+      <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+        <i class="bi bi-floppy me-1"></i>Salvar
+      </button>
+    </form>
+  </div>
+  <div class="card-body py-3">
+    <div class="d-flex justify-content-around align-items-center">
+      <div class="pstat">
+        <span class="l" style="color:#1b5e20">⬡ Diurnas</span>
+        <span class="n" style="color:#1b5e20" id="param-hd">{{ calc.hd_total|int }}h</span>
+      </div>
+      <div class="pstat">
+        <span class="l" style="color:#1565c0">☾ Noturnas</span>
+        <span class="n" style="color:#1565c0" id="param-hn">{{ calc.hn_total|int }}h</span>
+      </div>
+      <div class="pstat">
+        <span class="l" style="color:#e65100">⬡+ Extra Diurnas</span>
+        <span class="n" style="color:#e65100" id="param-hed">{{ calc.hed_total|int }}h</span>
+      </div>
+      <div class="pstat">
+        <span class="l" style="color:#4527a0">☾+ Extra Noturnas</span>
+        <span class="n" style="color:#4527a0" id="param-hen">{{ calc.hen_total|int }}h</span>
+      </div>
+      <div class="pstat">
+        <span class="l">Equivalentes</span>
+        <span class="n">{{ calc.horas_eq|round(1) }}h</span>
+      </div>
+      <div class="pstat">
+        <span class="l">Taxa Diurna</span>
+        <span class="n text-positivo" style="font-size:1rem">{{ calc.taxa_diurna|brl }}/h</span>
+      </div>
+      <div class="pstat">
+        <span class="l">Taxa Noturna (×1,25)</span>
+        <span class="n text-positivo" style="font-size:1rem">{{ calc.taxa_noturna|brl }}/h</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── REPASSE FINAL ───────────────────────────────────────────────────── -->
+<div class="card mb-3" id="resultado">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table me-1"></i>Repasse Final — {{ periodo.titulo }}</span>
+    {% if periodo.status == 'fechado' %}
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-success d-flex align-items-center gap-1">
+        <i class="bi bi-check-circle-fill"></i> Pagamentos registrados no caixa
+      </span>
+      <a href="{{ url_for('folha.relatorio', id=periodo.id) }}" target="_blank"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-printer me-1"></i>Imprimir Relatório
+      </a>
+    </div>
+    {% elif calc.resultados %}
+    <div class="d-flex align-items-center gap-2">
+      <button type="button"
+              class="btn btn-sm {% if previsao_existente %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+              data-bs-toggle="modal" data-bs-target="#modalReservarPrevisao"
+              title="Lança um pendente no Fluxo de Caixa com o total estimado">
+        <i class="bi bi-calendar-event me-1"></i>
+        {% if previsao_existente %}
+          Previsão: {{ previsao_existente.valor|brl }} reservada
+        {% else %}
+          Reservar no Fluxo de Caixa
+        {% endif %}
+      </button>
+      <button type="button" class="btn btn-sm btn-success"
+              data-bs-toggle="modal" data-bs-target="#modalRegistrarPagamentos">
+        <i class="bi bi-cash-coin me-1"></i>Registrar Pagamentos no Caixa
+      </button>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card-body p-0">
+    {% if calc.resultados %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Prestadora de serviço</th>
+            <th class="text-center" style="color:#1b5e20" title="Horas diurnas">H.D</th>
+            <th class="text-end"    style="color:#1b5e20">Vl.D</th>
+            <th class="text-center" style="color:#1565c0" title="Horas noturnas">H.N</th>
+            <th class="text-end"    style="color:#1565c0">Vl.N</th>
+            <th class="text-center" style="color:#e65100" title="Extras diurnas">ED</th>
+            <th class="text-end"    style="color:#e65100">Vl.ED</th>
+            <th class="text-center" style="color:#4527a0" title="Extras noturnas">EN</th>
+            <th class="text-end"    style="color:#4527a0">Vl.EN</th>
+            <th class="text-end fw-bold">BRUTO</th>
+            <th class="text-center">Desc.</th>
+            <th class="text-end fw-bold" style="color:#4527a0">LÍQUIDO</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in calc.resultados %}
+          <tr>
+            <td style="font-size:.82rem">{{ r.funcionario.nome }}</td>
+            <td class="text-center small">{{ r.escala.horas_diurnas|int }}</td>
+            <td class="text-end text-muted small">{{ r.v_diurnas|brl }}</td>
+            <td class="text-center small">{{ r.escala.horas_noturnas|int }}</td>
+            <td class="text-end text-muted small">{{ r.v_noturnas|brl }}</td>
+            <td class="text-center small">{{ r.escala.horas_extra|int }}</td>
+            <td class="text-end text-muted small">{{ r.v_extra_d|brl }}</td>
+            <td class="text-center small">{{ (r.escala.horas_extra_noturnas or 0)|int }}</td>
+            <td class="text-end text-muted small">{{ r.v_extra_n|brl }}</td>
+            <td class="text-end fw-bold">{{ r.bruto|brl }}</td>
+            <td class="text-center text-muted small">{{ (r.desc_pct * 100)|round(0)|int }}%</td>
+            <td class="text-end fw-bold" style="color:#4527a0">{{ r.liquido|brl }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-light">
+          <tr class="fw-bold">
+            <td colspan="9" class="text-end text-muted small">TOTAL</td>
+            <td class="text-end">{{ calc.total_bruto|brl }}</td>
+            <td class="text-end text-muted small">{{ calc.total_desconto_val|brl }}</td>
+            <td class="text-end" style="color:#4527a0">{{ calc.total_liquido|brl }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-people" style="font-size:2rem;opacity:.2"></i>
+      <p class="mt-2 mb-0">Nenhum prestador de serviço na escala deste período.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── HORAS POR PRESTADORA DE SERVIÇO ──────────────────────────────────────────── -->
+<div class="card" id="escala">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock me-1"></i>Horas por Prestadora de serviço</span>
+    <small class="text-muted fw-normal" style="font-size:.78rem">
+      <span style="color:#1b5e20">⬡ D: <strong id="sum-hd">{{ calc.hd_total|int }}</strong>h</span>
+      &ensp;
+      <span style="color:#1565c0">☾ N: <strong id="sum-hn">{{ calc.hn_total|int }}</strong>h</span>
+      &ensp;
+      <span style="color:#e65100">⬡+ ED: <strong id="sum-hed">{{ calc.hed_total|int }}</strong>h</span>
+      &ensp;
+      <span style="color:#4527a0">☾+ EN: <strong id="sum-hen">{{ calc.hen_total|int }}</strong>h</span>
+    </small>
+  </div>
+  <div class="card-body p-0">
+    {% if periodo.escalas %}
+    <form method="post" action="{{ url_for('folha.salvar_escala', id=periodo.id) }}">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" style="font-size:.84rem">
+          <thead style="background:#f8f9fa">
+            <tr>
+              <th style="min-width:160px">Prestadora de serviço</th>
+              <th class="text-center" style="min-width:90px;color:#1b5e20">
+                ⬡ Diurnas<br><small class="fw-normal text-muted">(h)</small>
+              </th>
+              <th class="text-center" style="min-width:90px;color:#1565c0">
+                ☾ Noturnas<br><small class="fw-normal text-muted">(h)</small>
+              </th>
+              <th class="text-center" style="min-width:110px;color:#e65100">
+                ⬡+ Extra Diurnas<br><small class="fw-normal text-muted">(h)</small>
+              </th>
+              <th class="text-center" style="min-width:110px;color:#4527a0">
+                ☾+ Extra Noturnas<br><small class="fw-normal text-muted">(h)</small>
+              </th>
+              {% if calc.rateio_custos is none %}
+              <th class="text-center" style="min-width:100px">
+                Desconto<br><small class="fw-normal text-muted">(%)</small>
+              </th>
+              {% endif %}   {# a partir de nov/2026 as despesas do mês são rateadas: o desconto individual não vale mais #}
+              <th class="text-end" style="min-width:110px">
+                Bruto est.<br><small class="fw-normal text-muted">(R$)</small>
+              </th>
+              <th class="text-end" style="min-width:110px;color:#4527a0">
+                Líquido est.<br><small class="fw-normal text-muted">(R$)</small>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in periodo.escalas|sort(attribute='funcionario.nome') %}
+            {% if calc.rateio_custos is not none %}{% set desc = calc.resultados[0].desc_pct if calc.resultados else 0 %}
+            {% else %}{% set desc = e.taxa_desconto if e.taxa_desconto is not none else e.funcionario.taxa_desconto %}{% endif %}
+            {% set bruto_est = (e.horas_diurnas * calc.taxa_diurna)
+                             + (e.horas_noturnas * calc.taxa_noturna)
+                             + (e.horas_extra * calc.taxa_diurna)
+                             + ((e.horas_extra_noturnas or 0) * calc.taxa_noturna) %}
+            <tr>
+              <td class="fw-semibold" style="color:var(--cm-primary-dark)">{{ e.funcionario.nome }}</td>
+              <td class="text-center">
+                <input type="number" name="hd_{{ e.id }}"
+                       class="form-control form-control-sm text-center hora-input mx-auto"
+                       style="max-width:75px;border-color:#a5d6a7"
+                       data-tipo="hd" value="{{ e.horas_diurnas|int }}" min="0" step="1">
+              </td>
+              <td class="text-center">
+                <input type="number" name="hn_{{ e.id }}"
+                       class="form-control form-control-sm text-center hora-input mx-auto"
+                       style="max-width:75px;border-color:#90caf9"
+                       data-tipo="hn" value="{{ e.horas_noturnas|int }}" min="0" step="1">
+              </td>
+              <td class="text-center">
+                <input type="number" name="hed_{{ e.id }}"
+                       class="form-control form-control-sm text-center hora-input mx-auto"
+                       style="max-width:75px;border-color:#ff8a65"
+                       data-tipo="hed" value="{{ e.horas_extra|int }}" min="0" step="1">
+              </td>
+              <td class="text-center">
+                <input type="number" name="hen_{{ e.id }}"
+                       class="form-control form-control-sm text-center hora-input mx-auto"
+                       style="max-width:75px;border-color:#9575cd"
+                       data-tipo="hen" value="{{ (e.horas_extra_noturnas or 0)|int }}" min="0" step="1">
+              </td>
+              {% if calc.rateio_custos is none %}
+              <td class="text-center">
+                <div class="input-group input-group-sm mx-auto" style="max-width:90px">
+                  <input type="number" name="desc_{{ e.id }}"
+                         class="form-control form-control-sm text-center"
+                         value="{{ (desc * 100)|round(1) }}" min="0" max="100" step="0.1">
+                  <span class="input-group-text px-1" style="font-size:.72rem">%</span>
+                </div>
+              </td>
+              {% endif %}
+              <td class="text-end fw-semibold">{{ bruto_est|brl }}</td>
+              <td class="text-end fw-semibold" style="color:#4527a0">
+                {{ (bruto_est * (1 - desc))|brl }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot style="background:#f8f9fa;font-size:.8rem">
+            <tr>
+              <td class="text-end text-muted fw-bold">TOTAL</td>
+              <td class="text-center fw-bold" style="color:#1b5e20"><span id="foot-hd">{{ calc.hd_total|int }}</span>h</td>
+              <td class="text-center fw-bold" style="color:#1565c0"><span id="foot-hn">{{ calc.hn_total|int }}</span>h</td>
+              <td class="text-center fw-bold" style="color:#e65100"><span id="foot-hed">{{ calc.hed_total|int }}</span>h</td>
+              <td class="text-center fw-bold" style="color:#4527a0"><span id="foot-hen">{{ calc.hen_total|int }}</span>h</td>
+              <td colspan="{{ 2 if calc.rateio_custos is not none else 3 }}"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="p-3 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm px-4">
+          <i class="bi bi-floppy me-1"></i>Salvar Escala
+        </button>
+      </div>
+    </form>
+    {% else %}
+    <div class="text-center text-muted py-3">Nenhum prestador de serviço na escala.</div>
+    {% endif %}
+
+    {% if sem_escala %}
+    <div class="border-top p-3" style="background:#fafafa">
+      <div class="text-muted small fw-bold mb-2">ADICIONAR PRESTADOR DE SERVIÇO À ESCALA</div>
+      <form method="post" action="{{ url_for('folha.adicionar_funcionario_periodo', id=periodo.id) }}">
+        <div class="d-flex gap-2" style="max-width:400px">
+          <select name="funcionario_id" class="form-select form-select-sm">
+            {% for f in sem_escala %}
+            <option value="{{ f.id }}">{{ f.nome }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-sm btn-outline-primary px-3">
+            <i class="bi bi-plus-lg me-1"></i>Adicionar
+          </button>
+        </div>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Modal: Registrar Pagamentos no Caixa ───────────────────────────── -->
+{% if calc.resultados and periodo.status != 'fechado' %}
+<div class="modal fade" id="modalRegistrarPagamentos" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cm-accent)">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-cash-coin me-2" style="color:var(--cm-primary)"></i>
+          Registrar Pagamentos no Caixa — {{ periodo.titulo }}
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('folha.registrar_pagamentos', id=periodo.id) }}">
+        <div class="modal-body">
+          <div class="alert alert-info py-2 px-3 mb-3 d-flex gap-2 align-items-start" style="font-size:.82rem">
+            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+            <div>
+              Será criado um lançamento de <strong>despesa</strong> por prestadora de serviço no
+              <strong>Financeiro → A Pagar</strong>, já marcado como <strong>Pago</strong>,
+              com centro de custo <em>Recursos Humanos (CC006)</em>.
+              A folha será automaticamente <strong>fechada</strong> após o registro.
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+              <label class="form-label small fw-bold">Data do Pagamento</label>
+              <input type="date" name="data_pagamento" id="modal-data-pagamento" class="form-control" required>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small fw-bold">Forma de Pagamento</label>
+              <select name="forma_pagamento" class="form-select">
+                {% for v, lab in formas_ativas if formas_taxa.get(v, 'nenhuma') != 'credito' %}<option value="{{ v }}">{{ lab }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0" style="font-size:.84rem">
+              <thead class="table-light">
+                <tr>
+                  <th>Prestadora de serviço</th>
+                  <th class="text-end">Bruto</th>
+                  <th class="text-center">Desc.</th>
+                  <th class="text-end fw-bold" style="color:#4527a0">Líquido (a pagar)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in calc.resultados %}
+                <tr>
+                  <td>{{ r.funcionario.nome }}</td>
+                  <td class="text-end">{{ r.bruto|brl }}</td>
+                  <td class="text-center text-muted small">{{ (r.desc_pct * 100)|round(0)|int }}%</td>
+                  <td class="text-end fw-bold" style="color:#4527a0">{{ r.liquido|brl }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light fw-bold">
+                <tr>
+                  <td>TOTAL</td>
+                  <td class="text-end">{{ calc.total_bruto|brl }}</td>
+                  <td></td>
+                  <td class="text-end" style="color:#4527a0">{{ calc.total_liquido|brl }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success btn-sm px-4">
+            <i class="bi bi-check-lg me-1"></i>Confirmar e Registrar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Modal: Reservar Previsão no Fluxo de Caixa ────────────────────── -->
+{% if calc.resultados and periodo.status != 'fechado' %}
+<div class="modal fade" id="modalReservarPrevisao" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cm-accent)">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-calendar-event me-2" style="color:var(--cm-primary)"></i>
+          Reservar Previsão no Fluxo de Caixa
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('folha.reservar_previsao', id=periodo.id) }}">
+        <div class="modal-body">
+          <div class="alert alert-info py-2 px-3 mb-3 d-flex gap-2 align-items-start" style="font-size:.82rem">
+            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+            <div>
+              Cria um lançamento <strong>pendente</strong> de despesa no Fluxo de Caixa com o
+              total estimado da folha. Quando você registrar os pagamentos reais, esse
+              pendente é <strong>removido automaticamente</strong>.
+            </div>
+          </div>
+          <div class="rounded p-3 mb-3 d-flex justify-content-between align-items-center" style="background:#ede7f6">
+            <span class="fw-bold text-muted">Total estimado (líquido)</span>
+            <span class="fw-bold fs-5" style="color:#4527a0">{{ calc.total_liquido|brl }}</span>
+          </div>
+          {% if previsao_existente %}
+          <div class="alert alert-warning py-2 px-3 mb-3 small">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            Já existe uma previsão de <strong>{{ previsao_existente.valor|brl }}</strong>
+            para {{ previsao_existente.data_vencimento|data_br }}.
+            Salvar irá substituí-la pelo novo valor calculado.
+          </div>
+          {% endif %}
+          <div>
+            <label class="form-label small fw-bold">Data prevista de pagamento</label>
+            <input type="date" name="data_previsao" id="prev-data-venc" class="form-control" required>
+            <small class="text-muted">Sugestão: último dia do mês da folha.</small>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4">
+            <i class="bi bi-check-lg me-1"></i>
+            {% if previsao_existente %}Atualizar Previsão{% else %}Reservar Previsão{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const hoje = new Date().toISOString().split('T')[0];
+document.querySelectorAll('.dp-hoje').forEach(el => { el.value = hoje; });
+
+const modalPag = document.getElementById('modalRegistrarPagamentos');
+if (modalPag) {
+  modalPag.addEventListener('show.bs.modal', () => {
+    const inp = document.getElementById('modal-data-pagamento');
+    if (inp && !inp.value) inp.value = '{{ "%04d-%02d-01"|format(periodo.ano + (1 if periodo.mes == 12 else 0), periodo.mes % 12 + 1) }}';   // repasse: 1º dia do mês seguinte
+  });
+}
+
+const modalPrev = document.getElementById('modalReservarPrevisao');
+if (modalPrev) {
+  modalPrev.addEventListener('show.bs.modal', () => {
+    const inp = document.getElementById('prev-data-venc');
+    if (inp && !inp.value) {
+      const ano = {{ periodo.ano }}, mes = {{ periodo.mes }};
+      inp.value = new Date(ano, mes, 0).toISOString().split('T')[0];
+    }
+  });
+}
+
+function somarHoras() {
+  let hd = 0, hn = 0, hed = 0, hen = 0;
+  document.querySelectorAll('[name^="hd_"]').forEach(el  => hd  += parseFloat(el.value) || 0);
+  document.querySelectorAll('[name^="hn_"]').forEach(el  => hn  += parseFloat(el.value) || 0);
+  document.querySelectorAll('[name^="hed_"]').forEach(el => hed += parseFloat(el.value) || 0);
+  document.querySelectorAll('[name^="hen_"]').forEach(el => hen += parseFloat(el.value) || 0);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('sum-hd',  hd);  set('sum-hn',  hn);
+  set('sum-hed', hed); set('sum-hen', hen);
+  set('foot-hd', hd);  set('foot-hn', hn);
+  set('foot-hed',hed); set('foot-hen',hen);
+  set('param-hd',  hd  + 'h'); set('param-hn',  hn  + 'h');
+  set('param-hed', hed + 'h'); set('param-hen', hen + 'h');
+}
+document.querySelectorAll('[name^="hd_"],[name^="hn_"],[name^="hed_"],[name^="hen_"]')
+        .forEach(el => el.addEventListener('input', somarHoras));
+
+const radios       = document.querySelectorAll('[name="destino_tipo"]');
+const divFunc      = document.getElementById('div-select-func');
+const selFunc      = document.getElementById('select-func');
+const hiddenFuncId = document.getElementById('hidden-funcionario-id');
+const btnConfirmar = document.getElementById('btn-confirmar-destino');
+const btnAdd       = document.getElementById('btn-add-receita');
+const modalDestino = document.getElementById('modal-destino-receita');
+
+if (radios.length && btnConfirmar) {
+  radios.forEach(r => r.addEventListener('change', () => {
+    divFunc.style.display = document.getElementById('destino-especifica').checked ? '' : 'none';
+  }));
+
+  if (btnAdd && modalDestino) {
+    btnAdd.addEventListener('click', function(e) {
+      const vals = document.getElementById('form-nova-receita').querySelectorAll('input[type="number"]');
+      let temValor = false;
+      vals.forEach(v => { if (parseFloat(v.value) > 0) temValor = true; });
+      if (!temValor) { e.stopImmediatePropagation(); alert('Preencha ao menos um valor antes de adicionar.'); }
+    });
+  }
+
+  btnConfirmar.addEventListener('click', () => {
+    const especifica = document.getElementById('destino-especifica').checked;
+    if (especifica) {
+      if (!selFunc.value) { selFunc.classList.add('is-invalid'); return; }
+      selFunc.classList.remove('is-invalid');
+      hiddenFuncId.value = selFunc.value;
+    } else {
+      hiddenFuncId.value = '';
+    }
+    bootstrap.Modal.getInstance(modalDestino).hide();
+    document.getElementById('form-nova-receita').submit();
+  });
+
+  modalDestino.addEventListener('hidden.bs.modal', () => {
+    document.getElementById('destino-rateio').checked = true;
+    divFunc.style.display = 'none';
+    selFunc.classList.remove('is-invalid');
+    selFunc.value = '';
+    hiddenFuncId.value = '';
+  });
+}
+</script>
+{% endblock %}

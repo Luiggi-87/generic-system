@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% block title %}Clientes — {{ marca.nome }}{% endblock %}
+{% block page_title %}Clientes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div></div>
+  <a href="{{ url_for('clientes.novo') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nova Cliente
+  </a>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Buscar</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="Nome, médico, hospital, bebê…" value="{{ q }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="ativa"      {% if status=='ativa' %}selected{% endif %}>Gestante</option>
+          <option value="pos_parto"  {% if status=='pos_parto' %}selected{% endif %}>Puérpera</option>
+
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Ano</label>
+        <select name="ano" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="2026" {% if ano=='2026' %}selected{% endif %}>2026</option>
+          <option value="2025" {% if ano=='2025' %}selected{% endif %}>2025</option>
+          <option value="2022" {% if ano=='2022' %}selected{% endif %}>2022</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Tipo de Parto</label>
+        <select name="tipo_parto" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="parto_normal"  {% if tipo_parto=='parto_normal' %}selected{% endif %}>Parto Normal</option>
+          <option value="parto_cesario" {% if tipo_parto=='parto_cesario' %}selected{% endif %}>Cesariana</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Pagamento</label>
+        <select name="pagamento" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="pendente" {% if pagamento=='pendente' %}selected{% endif %}>Já pariu e não pagou</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-outline-primary btn-sm w-100">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+      {% if q or status or ano or tipo_parto or pagamento %}
+      <div class="col-md-2">
+        <a href="{{ url_for('clientes.index') }}" class="btn btn-outline-secondary btn-sm w-100">
+          <i class="bi bi-x me-1"></i>Limpar
+        </a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Contadores rápidos -->
+<div class="row g-2 mb-3">
+  <div class="col-auto">
+    <a href="?status=ativa" class="text-decoration-none">
+      <div class="rounded px-3 py-2 d-inline-flex align-items-center gap-2" style="background:#e8f5e9">
+        <i class="bi bi-heart-pulse text-success"></i>
+        <span class="small fw-bold">Gestantes: {{ clientes|selectattr('status','eq','ativa')|list|length if not status else '—' }}</span>
+      </div>
+    </a>
+  </div>
+  <div class="col-auto">
+    <a href="?status=pos_parto" class="text-decoration-none">
+      <div class="rounded px-3 py-2 d-inline-flex align-items-center gap-2" style="background:#e3f2fd">
+        <i class="bi bi-stars" style="color:#1565c0"></i>
+        <span class="small fw-bold">Puérpera: {{ clientes|selectattr('status','eq','pos_parto')|list|length if not status else '—' }}</span>
+      </div>
+    </a>
+  </div>
+  <div class="col-auto">
+    <div class="rounded px-3 py-2 d-inline-flex align-items-center gap-2" style="background:var(--cm-bg)">
+      <i class="bi bi-people" style="color:var(--cm-primary-dark)"></i>
+      <span class="small fw-bold">Exibindo: {{ clientes|length }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if clientes %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" style="font-size:.87rem">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>DPP</th>
+            <th>Data Parto</th>
+            <th>Tipo</th>
+            <th>Médico pré-natalista</th>
+            <th>Grupo / Plantão</th>
+            <th>Hospital</th>
+            <th>Bebê</th>
+            <th>Contrato</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in clientes %}
+          <tr>
+            <td>
+              <a href="{{ url_for('clientes.detail', id=c.id) }}"
+                 class="fw-semibold text-decoration-none">{{ rotulo(c) }}</a>
+              {% if c.ano_referencia %}
+              <span class="badge bg-light text-dark ms-1" style="font-size:.7rem">{{ c.ano_referencia }}</span>
+              {% endif %}
+              {% if c.id in sem_pag %}
+              <span class="badge bg-warning text-dark ms-1" style="font-size:.68rem"
+                    title="Já pariu em {{ c.data_parto|data_br }} e ainda não pagou {{ sem_pag[c.id]|brl }}">
+                <i class="bi bi-exclamation-octagon-fill"></i> parto sem pagamento · {{ sem_pag[c.id]|brl }}
+              </span>
+              {% endif %}
+              {% if c.total_vencido > 0 %}
+              <span class="badge bg-danger ms-1" style="font-size:.68rem"
+                    title="Inadimplente: {{ c.total_vencido|brl }} em atraso">
+                <i class="bi bi-exclamation-triangle-fill"></i> {{ c.total_vencido|brl }}
+              </span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ c.data_prevista_parto|data_br }}</td>
+            <td>
+              {% if c.data_parto %}
+                <span class="text-success fw-bold">{{ c.data_parto|data_br }}</span>
+                <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-muted btn-reg-parto"
+                  title="Corrigir data"
+                  data-id="{{ c.id }}"
+                  data-nome="{{ c.nome }}"
+                  data-data="{{ c.data_parto.strftime('%Y-%m-%d') }}"
+                  data-tipo="{{ c.tipo_parto or '' }}"
+                  data-bs-toggle="modal" data-bs-target="#modalParto">
+                  <i class="bi bi-pencil-fill" style="font-size:.65rem"></i>
+                </button>
+              {% else %}
+                <button type="button"
+                  class="btn btn-sm btn-outline-success btn-reg-parto"
+                  style="font-size:.75rem;padding:2px 8px"
+                  data-id="{{ c.id }}"
+                  data-nome="{{ c.nome }}"
+                  data-data=""
+                  data-tipo="{{ c.tipo_parto or '' }}"
+                  data-bs-toggle="modal" data-bs-target="#modalParto">
+                  <i class="bi bi-plus-lg me-1"></i>Registrar
+                </button>
+              {% endif %}
+            </td>
+            <td>
+              {% if c.tipo_parto == 'parto_normal' %}
+                <span class="badge" style="background:#d0f0c0;color:#1b5e20">PN</span>
+              {% elif c.tipo_parto == 'parto_cesario' %}
+                <span class="badge" style="background:#ffe0b2;color:#bf360c">PC</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ c.medico_grupo or '—' }}</td>
+            <td class="text-muted small">{{ c.grupo_parto or '—' }}</td>
+            <td class="text-muted small">{{ c.hospital_parto or '—' }}</td>
+            <td class="text-muted small">{{ c.nome_bebe or '—' }}</td>
+            <td>
+              {% if c.contrato_status %}
+              <span class="badge {{ c.contrato_status|cor_contrato }}" style="font-size:.72rem">{{ c.contrato_status[:12] }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if c.status == 'ativa' %}<span class="badge bg-success">Gestante</span>
+              {% elif c.status == 'pos_parto' %}<span class="badge bg-info text-dark">Puérpera</span>
+              {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('clientes.detail', id=c.id) }}"
+                   class="btn btn-sm btn-outline-secondary" title="Ver">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{{ url_for('clientes.editar', id=c.id) }}"
+                   class="btn btn-sm btn-outline-primary" title="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{{ url_for('clientes.excluir', id=c.id) }}"
+                      class="del-cliente-form d-inline">
+                  <button type="button" class="btn btn-sm btn-outline-danger btn-del-cliente" title="Excluir"
+                          data-nome="{{ c.nome | e }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-people" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhuma cliente encontrada.</p>
+      <a href="{{ url_for('clientes.novo') }}" class="btn btn-primary">Cadastrar Cliente</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Modal Registrar Parto ──────────────────────────────────────────── -->
+<div class="modal fade" id="modalParto" tabindex="-1" aria-labelledby="modalPartoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cm-accent)">
+        <h6 class="modal-title fw-bold" id="modalPartoLabel">
+          <i class="bi bi-calendar-heart me-2" style="color:var(--cm-primary)"></i>Registrar Parto
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="form-parto" method="post" action="">
+        <div class="modal-body">
+          <p class="fw-semibold mb-3" id="modal-nome-cliente" style="color:var(--cm-primary-dark)"></p>
+
+          <div class="mb-3">
+            <label class="form-label">Data do Parto *</label>
+            <input type="date" name="data_parto" id="modal-data-parto"
+                   class="form-control" required>
+          </div>
+
+          <div class="mb-1">
+            <label class="form-label">Tipo de Parto</label>
+            <select name="tipo_parto" id="modal-tipo-parto" class="form-select">
+              <option value="">— não alterar —</option>
+              <option value="parto_normal">Parto Normal (PN)</option>
+              <option value="parto_cesario">Cesariana (PC)</option>
+            </select>
+          </div>
+
+          <div class="alert alert-info mt-3 mb-0 py-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            O status será alterado automaticamente para <strong>Puérpera</strong>.
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Confirmar Parto
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.btn-del-cliente').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    if (confirm('Excluir ' + this.dataset.nome + '? Esta ação não pode ser desfeita.'))
+      this.closest('form').submit();
+  });
+});
+
+document.querySelectorAll('.btn-reg-parto').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const id   = this.dataset.id;
+    const nome = this.dataset.nome;
+    const data = this.dataset.data;
+    const tipo = this.dataset.tipo;
+
+    document.getElementById('modal-nome-cliente').textContent = nome;
+    document.getElementById('modal-data-parto').value =
+      data || new Date().toISOString().split('T')[0];
+
+    const selTipo = document.getElementById('modal-tipo-parto');
+    selTipo.value = tipo || '';
+
+    document.getElementById('form-parto').action =
+      '/clientes/' + id + '/registrar-parto';
+  });
+});
+</script>
+{% endblock %}

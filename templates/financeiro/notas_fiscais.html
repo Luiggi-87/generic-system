@@ -1,0 +1,456 @@
+{% extends 'base.html' %}
+{% block title %}Notas Fiscais — {{ marca.nome }}{% endblock %}
+{% block page_title %}Notas Fiscais{% endblock %}
+
+{% block content %}
+
+<div class="alert alert-info d-flex gap-2 align-items-start py-2 small">
+  <i class="bi bi-info-circle fs-5"></i>
+  <div><strong>Numeração das notas:</strong> as notas emitidas <strong>até 31/12/2025</strong> saíram no <strong>sistema municipal</strong>;
+    de <strong>2026 em diante</strong> são emitidas pelo <strong>sistema nacional (governo federal)</strong>, que passa a ser o padrão.
+    As duas numerações <strong>se repetem</strong> (por exemplo, existe uma nota nº 17 em cada sistema). Por isso, identifique cada nota
+    pelo <strong>número + sistema (Municipal ou Nacional)</strong>, mostrado ao lado do número.</div>
+</div>
+
+<!-- KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between align-items-center"
+         style="background:#fff5f5;border:1px solid #f5c6cb">
+      <div>
+        <div class="text-muted small fw-bold" style="font-size:.72rem;letter-spacing:.05em">RECEBIMENTOS SEM NF</div>
+        <div class="fw-bold fs-4" style="color:#a32d2d">{{ total_sem_nf|brl }}</div>
+        <div class="text-muted" style="font-size:.75rem">{{ sem_nf|length }} cliente(s) aguardando nota</div>
+      </div>
+      <i class="bi bi-file-earmark-x opacity-25" style="font-size:2.2rem;color:#a32d2d"></i>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between align-items-center"
+         style="background:#fff8e1;border:1px solid #ffe082">
+      <div>
+        <div class="text-muted small fw-bold" style="font-size:.72rem;letter-spacing:.05em">IMPOSTOS A PAGAR</div>
+        <div class="fw-bold fs-4" style="color:#854f0b">{{ total_iss_pendente|brl }}</div>
+        <div class="text-muted" style="font-size:.75rem">
+          {{ notas|selectattr('status_iss','equalto','a_pagar')|list|length }} nota(s) com ISS pendente
+        </div>
+      </div>
+      <i class="bi bi-receipt opacity-25" style="font-size:2.2rem;color:#854f0b"></i>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between align-items-center"
+         style="background:#e8f5e9">
+      <div>
+        <div class="text-muted small fw-bold" style="font-size:.72rem;letter-spacing:.05em">IMPOSTOS PAGOS (MÊS)</div>
+        <div class="fw-bold fs-4 text-positivo">{{ total_iss_pago_mes|brl }}</div>
+        <div class="text-muted" style="font-size:.75rem">
+          {{ notas|selectattr('status_iss','equalto','pago')|list|length }} nota(s) quitadas
+        </div>
+      </div>
+      <i class="bi bi-check-circle opacity-25" style="font-size:2.2rem;color:#2e7d32"></i>
+    </div>
+  </div>
+</div>
+
+{% set confirmadas = duplicidades_decididas|selectattr('decisao.decisao','equalto','duplicada')|list %}
+{% set revisadas = duplicidades_decididas|selectattr('decisao.decisao','equalto','ok')|list %}
+{% if duplicidades or duplicidades_decididas %}
+<!-- Possíveis duplicidades -->
+<details class="card mb-4" id="duplicidades" {% if duplicidades|selectattr('nivel','equalto','alta')|list or confirmadas %}open{% endif %}>
+  <summary class="card-header fw-bold" style="cursor:pointer">
+    <i class="bi bi-exclamation-triangle me-1" style="color:#b26a00"></i>Possíveis duplicidades
+    <span class="badge bg-warning text-dark ms-1">{{ duplicidades|length }}</span>
+    {% if confirmadas %}<span class="badge bg-danger ms-1">{{ confirmadas|length }} confirmada(s) a tratar</span>{% endif %}
+    <span class="text-muted fw-normal small ms-2">decida cada caso; a mesma cliente pode ter tido outro filho</span>
+  </summary>
+  <div class="card-body p-0">
+
+    {% for d in duplicidades %}
+    <div class="p-3 border-bottom">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-1">
+        <strong>{{ d.cliente }}</strong>
+        {% if d.nivel == 'alta' %}<span class="badge bg-danger">provável duplicidade</span>
+        {% elif d.nivel == 'media' %}<span class="badge bg-warning text-dark">conferir</span>
+        {% else %}<span class="badge bg-secondary">mesmo nome, outra ficha</span>{% endif %}
+      </div>
+      <div class="small text-muted mb-1">{{ d.motivo }}</div>
+      <ul class="small mb-2">
+        {% for n in d.notas %}
+        <li>NF <strong>{{ n.numero }}</strong> · {{ n.sistema_emissao }} · {{ n.valor_bruto|brl }} · emitida em {{ n.data_emissao|data_br }}
+          · ISS {{ {'pago': 'pago', 'a_pagar': 'a pagar', 'nao_lancado': 'não lançado'}.get(n.status_iss, n.status_iss) }}
+          {% if d.nivel == 'baixa' %}· <span class="text-muted">{{ rotulo(n.cliente) }}</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      <form method="post" action="{{ url_for('notas_fiscais.decidir_duplicidade') }}" class="d-flex flex-wrap gap-2 align-items-center">
+        <input type="hidden" name="chave" value="{{ d.chave }}">
+        <select name="escolha" class="form-select form-select-sm" style="max-width:340px" required>
+          <option value="">Decisão…</option>
+          <optgroup label="Não é duplicidade (deixar como está)">
+            <option value="ok|Serviço adicional">Serviço adicional</option>
+            <option value="ok|Outro filho (outra gestação)">Outro filho (outra gestação)</option>
+            <option value="ok|Nota reemitida, anterior já tratada">Nota reemitida, anterior já tratada</option>
+            <option value="ok|Outro motivo">Outro motivo (descreva ao lado)</option>
+          </optgroup>
+          <optgroup label="É duplicidade (a tratar)">
+            {% for n in d.notas %}<option value="duplicada|{{ n.id }}">A NF {{ n.numero }} ({{ n.sistema_emissao }}) é a duplicada</option>{% endfor %}
+          </optgroup>
+        </select>
+        <input type="text" name="observacao" class="form-control form-control-sm" style="max-width:260px" placeholder="Observação (opcional)">
+        <button class="btn btn-sm btn-primary">Salvar decisão</button>
+      </form>
+    </div>
+    {% endfor %}
+
+    {% if confirmadas %}
+    <div class="p-3 border-bottom" style="background:#fff5f5">
+      <div class="fw-bold mb-2" style="color:#a32d2d">Duplicidades confirmadas — a tratar</div>
+      {% for d in confirmadas %}
+      {% set nd = d.decisao.nota %}
+      <div class="small mb-2">
+        <strong>{{ d.cliente }}</strong> · NF <strong>{{ nd.numero }}</strong> ({{ nd.sistema_emissao }}, {{ nd.valor_bruto|brl }}) marcada como duplicada
+        <span class="text-muted">por {{ d.decisao.decidido_por }} em {{ d.decisao.created_at|data_br }}{% if d.decisao.observacao %} — {{ d.decisao.observacao }}{% endif %}</span>
+        <div class="d-flex flex-wrap gap-2 align-items-center mt-1">
+          {% if nd.status_iss == 'pago' %}
+          <span class="text-muted">O ISS desta nota já foi pago: a nota não pode ser anulada aqui, trate com a contabilidade.</span>
+          {% else %}
+          <form method="post" action="{{ url_for('notas_fiscais.anular', id=nd.id) }}" id="form-anular-dup-{{ nd.id }}">
+            <button type="button" class="btn btn-sm btn-outline-danger"
+              onclick="confirmar('Anular a NF {{ nd.numero }} ({{ nd.sistema_emissao }})? O ISS pendente dela também é cancelado.','form-anular-dup-{{ nd.id }}')">Anular esta nota</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('notas_fiscais.reabrir_duplicidade', id=d.decisao.id) }}" class="d-inline">
+            <button class="btn btn-sm btn-outline-secondary">Desfazer decisão</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if revisadas %}
+    <details class="p-3">
+      <summary class="small fw-bold text-muted" style="cursor:pointer">Já revisadas ({{ revisadas|length }}) — não é duplicidade</summary>
+      {% for d in revisadas %}
+      <div class="small mt-2">
+        <strong>{{ d.cliente }}</strong> · NF {% for n in d.notas %}{{ n.numero }} ({{ n.sistema_emissao }}){% if not loop.last %}, {% endif %}{% endfor %}
+        — <span class="badge bg-success">{{ d.decisao.motivo }}</span>
+        <span class="text-muted">por {{ d.decisao.decidido_por }} em {{ d.decisao.created_at|data_br }}{% if d.decisao.observacao %} — {{ d.decisao.observacao }}{% endif %}</span>
+        <form method="post" action="{{ url_for('notas_fiscais.reabrir_duplicidade', id=d.decisao.id) }}" class="d-inline ms-1">
+          <button class="btn btn-sm btn-link p-0">reabrir</button>
+        </form>
+      </div>
+      {% endfor %}
+    </details>
+    {% endif %}
+
+    {% if not duplicidades and not confirmadas %}<div class="p-3 small text-muted">Nenhuma pendente.</div>{% endif %}
+  </div>
+</details>
+{% endif %}
+
+<!-- Formulário nova NF -->
+<div class="card" id="form-nf">
+  <div class="card-header"><i class="bi bi-file-earmark-plus me-1"></i>Nova Nota Fiscal</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('notas_fiscais.importar_xml') }}" enctype="multipart/form-data"
+          class="d-flex flex-wrap align-items-center gap-2 p-3 mb-3 rounded border" style="background:#f3e5f5">
+      <i class="bi bi-file-earmark-code fs-5" style="color:#6a1b9a"></i>
+      <div class="fw-bold small">Importar nota (XML ou PDF)</div>
+      <input type="file" name="arquivos" accept=".xml,.pdf,text/xml,application/xml,application/pdf" multiple required class="form-control form-control-sm" style="max-width:340px">
+      <button class="btn btn-sm btn-primary"><i class="bi bi-upload me-1"></i>Ler arquivo(s)</button>
+      <span class="small text-muted">Use o XML da nota ou o PDF gerado pelo emissor (nacional). O sistema lê e mostra para você conferir antes de salvar.</span>
+    </form>
+    <form method="post" action="{{ url_for('notas_fiscais.nova') }}" id="form-nova-nf">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Número da NF</label>
+          <input type="text" name="numero" id="f-numero" class="form-control"
+                 placeholder="Ex: NF-000126" required>
+          <div class="form-text">Notas de 2026 em diante seguem a numeração do sistema nacional (governo federal).</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Cliente</label>
+          <select name="cliente_id" id="f-cliente" class="form-select" required>
+            <option value="">Selecione a cliente...</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}">{{ rotulo(c) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-bold">Competência</label>
+          <input type="month" name="competencia" id="f-competencia" class="form-control" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">Data de Emissão</label>
+          <input type="date" name="data_emissao" id="f-data" class="form-control" required>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Valor bruto cobrado (base da NF)</label>
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="number" name="valor_bruto" id="f-bruto" class="form-control"
+                   step="0.01" min="0" placeholder="0,00" required oninput="calcularISS()">
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">Valor líquido recebido</label>
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="number" name="valor_liquido" id="f-liquido" class="form-control"
+                   step="0.01" min="0" placeholder="0,00" required>
+          </div>
+          <div class="form-text">Após dedução da taxa da operadora</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-bold">ISS calculado ({{ (aliquota_iss * 100)|int }}%)</label>
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="text" id="f-iss-display" class="form-control bg-light"
+                   readonly value="0,00" style="color:#854f0b;font-weight:600">
+          </div>
+          <div class="form-text">Calculado automaticamente sobre o valor bruto</div>
+        </div>
+      </div>
+
+      <!-- Checkbox lançar ISS -->
+      <div class="border rounded p-3 mb-3" style="background:#fafafa">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" name="lancar_iss" id="ck-iss" checked
+                 onchange="toggleCamposISS()">
+          <label class="form-check-label fw-semibold" for="ck-iss">
+            Lançar imposto em <span style="color:#185fa5">Contas a Pagar</span>
+          </label>
+        </div>
+        <div class="text-muted small mb-3">
+          Cria um lançamento de despesa com o valor do ISS e status Pendente.
+        </div>
+        <div id="campos-iss">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Centro de custo</label>
+              <select name="centro_custo_id" class="form-select">
+                <option value="">— Selecione —</option>
+                {% for cc in centros_despesa %}
+                <option value="{{ cc.id }}">{{ cc.nome }} ({{ cc.codigo }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Vencimento do imposto</label>
+              <input type="date" name="vencimento_iss" id="f-vencimento" class="form-control">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2">
+        <a href="{{ url_for('notas_fiscais.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-floppy me-1"></i>Salvar Nota Fiscal
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Recebimentos sem NF -->
+{% if sem_nf %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center"
+       style="background:#fff5f5;color:#a32d2d">
+    <span><i class="bi bi-exclamation-circle me-1"></i>Recebimentos sem nota fiscal emitida</span>
+    <span class="badge bg-danger">{{ sem_nf|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Forma de pagamento</th>
+            <th class="text-end">Valor bruto (NF)</th>
+            <th class="text-end">Líquido recebido</th>
+            <th>Data recebimento</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in sem_nf %}
+          <tr>
+            <td class="fw-semibold">{{ rotulo(l.cliente) }}</td>
+            <td>
+              <span class="badge bg-secondary">
+                {{ formas_nomes.get(l.forma_pagamento, l.forma_pagamento) or '—' }}
+              </span>
+            </td>
+            <td class="text-end fw-semibold">{{ l.valor|brl }}</td>
+            <td class="text-end text-muted small">
+              {% if l.valor_liquido and l.valor_liquido != l.valor %}
+                {{ l.valor_liquido|brl }}
+                <div style="font-size:.72rem;color:#854f0b">
+                  taxa {{ "%.2f"|format((1 - l.valor_liquido / l.valor) * 100) }}%
+                </div>
+              {% else %}
+                {{ l.valor|brl }}
+                <div style="font-size:.72rem" class="text-muted">sem taxa</div>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ l.data_pagamento|data_br }}</td>
+            <td>
+              <button class="btn btn-sm btn-primary"
+                      onclick="preencherForm({{ l.cliente_id }}, {{ l.valor }}, {{ l.valor_liquido or l.valor }})">
+                <i class="bi bi-file-earmark-plus me-1"></i>Emitir NF
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Notas emitidas -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-file-earmark-text me-1"></i>Notas emitidas</span>
+    <span class="text-muted small">{{ notas|length }} nota(s)</span>
+  </div>
+  {% if notas %}
+  <form method="post" action="{{ url_for('notas_fiscais.baixa_iss') }}" id="form-baixa"
+        class="d-flex flex-wrap gap-2 align-items-end p-3 border-bottom bg-light">
+    <div class="small fw-bold w-100"><i class="bi bi-cash-coin me-1"></i>Dar baixa no ISS: marque as notas na tabela e clique em <em>Dar baixa</em>.
+      O imposto entra como despesa paga (DRE, Fluxo de Caixa e Caixa da Empresa). O ISS vence no <strong>dia 20 do mês seguinte</strong> à emissão
+      e, com a data em branco, é baixado nessa data.</div>
+    <div><label class="form-label small mb-0">Data do pagamento (opcional)</label>
+      <input type="date" name="data_pagamento" class="form-control form-control-sm"></div>
+    <div><label class="form-label small mb-0">Centro de custo</label>
+      <select name="centro_custo_id" class="form-select form-select-sm">
+        <option value="">— Selecione —</option>
+        {% for cc in centros_despesa %}<option value="{{ cc.id }}" {% if cc.id == cc_imposto_id %}selected{% endif %}>{{ cc.nome }}</option>{% endfor %}
+      </select></div>
+    <button class="btn btn-sm btn-primary" name="acao" value="pagar"><i class="bi bi-check2-circle me-1"></i>Dar baixa (ISS pago)</button>
+    <button class="btn btn-sm btn-outline-secondary" name="acao" value="lancar" title="Cria a despesa pendente, sem marcar como paga">Lançar como a pagar</button>
+  </form>
+  {% endif %}
+  <div class="card-body p-0">
+    {% if notas %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th><input type="checkbox" class="form-check-input" title="Marcar todas com ISS em aberto"
+                onclick="document.querySelectorAll('.ck-baixa').forEach(c => c.checked = this.checked)"></th>
+            <th>Nº NF</th>
+            <th>Cliente</th>
+            <th class="text-end">Valor bruto</th>
+            <th class="text-end">Líquido recebido</th>
+            <th class="text-end">ISS ({{ (aliquota_iss * 100)|int }}%)</th>
+            <th>Competência</th>
+            <th>Emissão</th>
+            <th>Imposto</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for n in notas %}
+          <tr {% if n.status == 'anulada' %}style="opacity:.55"{% endif %}>
+            <td>{% if n.status_iss in ('nao_lancado', 'a_pagar') %}<input type="checkbox" class="form-check-input ck-baixa" name="nf_ids" value="{{ n.id }}" form="form-baixa">{% endif %}</td>
+            <td>
+              <span class="badge" style="background:{% if n.status == 'anulada' %}#e0e0e0;color:#555{% else %}#e3f2fd;color:#0c447c{% endif %};font-size:.78rem">
+                {{ n.numero }}
+                <span class="ms-1 opacity-75" title="{{ 'Sistema municipal (até 2025)' if n.sistema_emissao == 'Municipal' else 'Sistema nacional — governo federal (2026 em diante)' }}">· {{ n.sistema_emissao }}</span>
+                {% if n.status == 'anulada' %}<span class="ms-1">(anulada)</span>{% endif %}
+              </span>
+            </td>
+            <td class="fw-semibold {% if n.status == 'anulada' %}text-decoration-line-through{% endif %}">{{ rotulo(n.cliente) }}</td>
+            <td class="text-end fw-semibold">{{ n.valor_bruto|brl }}</td>
+            <td class="text-end text-muted small">{{ n.valor_liquido|brl }}</td>
+            <td class="text-end fw-semibold" style="color:#854f0b">{{ n.valor_iss|brl }}</td>
+            <td class="text-muted small">{{ n.competencia_label }}</td>
+            <td class="text-muted small">{{ n.data_emissao|data_br }}</td>
+            <td>
+              {% if n.status_iss == 'pago' %}
+                <span class="badge bg-success">Pago</span>
+              {% elif n.status_iss == 'a_pagar' %}
+                <span class="badge bg-warning text-dark">A pagar</span>
+              {% elif n.status_iss == 'anulada' %}
+                <span class="badge bg-secondary">Anulada</span>
+              {% else %}
+                <span class="badge bg-secondary">Não lançado</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if n.status != 'anulada' %}
+              <form method="post" action="{{ url_for('notas_fiscais.anular', id=n.id) }}"
+                    id="anl-nf-{{ n.id }}">
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                  title="Anular (o registro é mantido para auditoria)"
+                  onclick="confirmar('Anular NF {{ n.numero }}? O registro será mantido.', 'anl-nf-{{ n.id }}')">
+                  <i class="bi bi-x-octagon"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-file-earmark-text" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhuma nota fiscal registrada.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ALIQUOTA = {{ aliquota_iss }};
+const hoje = new Date().toISOString().split('T')[0];
+document.getElementById('f-data').value = hoje;
+
+const mesAtual = new Date().toISOString().slice(0, 7);
+document.getElementById('f-competencia').value = mesAtual;
+
+function calcularISS() {
+  const bruto = parseFloat(document.getElementById('f-bruto').value) || 0;
+  const iss = bruto * ALIQUOTA;
+  document.getElementById('f-iss-display').value = iss.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function toggleCamposISS() {
+  const checked = document.getElementById('ck-iss').checked;
+  document.getElementById('campos-iss').style.display = checked ? '' : 'none';
+}
+
+// vencimento do ISS: dia 20 do mês seguinte à emissão (preenche se estiver em branco)
+function sugerirVencimento() {
+  const d = document.getElementById('f-data').value, v = document.getElementById('f-vencimento');
+  if (!d || !v) return;
+  let [a, m] = d.split('-').map(Number);
+  if (m === 12) { a++; m = 1; } else { m++; }
+  v.value = a + '-' + String(m).padStart(2, '0') + '-20';
+}
+document.getElementById('f-data').addEventListener('change', sugerirVencimento);
+sugerirVencimento();
+
+function preencherForm(clienteId, bruto, liquido) {
+  document.getElementById('f-cliente').value = clienteId;
+  document.getElementById('f-bruto').value = bruto.toFixed(2);
+  document.getElementById('f-liquido').value = liquido.toFixed(2);
+  calcularISS();
+  document.getElementById('form-nf').scrollIntoView({behavior:'smooth'});
+}
+</script>
+{% endblock %}

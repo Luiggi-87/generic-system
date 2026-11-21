@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Caixa da Empresa — {{ marca.nome }}{% endblock %}
+{% block page_title %}Caixa da Empresa{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-md-5">
+    <div class="stat-card" style="background:linear-gradient(135deg,{{ '#1b5e20,#2e7d32' if caixa_apos_iss >= 0 else '#b71c1c,#c62828' }})">
+      <div class="label">Valor em caixa na empresa, já descontado o ISS a emitir (estimado)</div>
+      <div class="value">{{ caixa_apos_iss|brl }}</div>
+      <div class="small opacity-75">de {{ linhas[0].mes if linhas else '—' }} até hoje</div>
+    </div>
+    <table class="table table-sm mt-2 mb-0 small">
+      <tr><td>Parte que fica na empresa − despesas pagas</td><td class="text-end">{{ total.resultado|brl }}</td></tr>
+      <tr><td>(−) ISS 6% das notas <strong>ainda não emitidas</strong> ({{ qtd_sem_nf }} cliente{{ '' if qtd_sem_nf == 1 else 's' }})
+          <a href="{{ url_for('contratos_iss.index', gerar=1, status_iss='estimado') }}" class="ms-1">ver quais</a></td>
+          <td class="text-end text-negativo">{{ iss_nao_emitidas|brl }}</td></tr>
+      <tr class="fw-bold"><td>Caixa após o ISS a emitir</td><td class="text-end">{{ caixa_apos_iss|brl }}</td></tr>
+      <tr><td colspan="2" class="text-muted">Notas já emitidas mas ainda não cadastradas no sistema aparecem aqui como "não emitidas";
+          ao cadastrá-las, este valor diminui.</td></tr>
+      {% if iss_emitidas_a_pagar > 0 %}
+      <tr class="text-muted"><td>Atenção: ISS de notas já emitidas e ainda <strong>não pagas</strong> (não descontado acima)
+          <a href="{{ url_for('contratos_iss.index', gerar=1, status_iss='a_pagar') }}" class="ms-1">ver</a></td>
+          <td class="text-end">{{ iss_emitidas_a_pagar|brl }}</td></tr>
+      {% endif %}
+    </table>
+  </div>
+  <div class="col-md-7">
+    <div class="alert alert-warning mb-0 small">
+      <strong>Como é calculado:</strong> para cada mês (pelo mês do parto, como no PDF), as entradas líquidas menos os repasses às
+      prestadoras de serviço é o que <strong>fica na empresa</strong>; dele saem as despesas <strong>pagas e lançadas no sistema</strong>
+      e o <strong>ISS estimado (6%) das notas que ainda não foram emitidas</strong> (contratos já recebidos, sem nota).
+      Custos que ainda não foram lançados (contador, DARF, DAE, insumos, pró-labore…) <strong>não estão descontados</strong>,
+      então o valor real na conta pode ser menor. Compare com o saldo do banco.
+    </div>
+  </div>
+</div>
+
+{% for a in avisos %}<div class="alert alert-danger py-2 small">{{ a }}</div>{% endfor %}
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead><tr>
+          <th>Mês do parto</th><th class="text-end">Entradas (líquidas)</th><th class="text-end">Repasses às prestadoras de serviço</th>
+          <th class="text-end">Fica na empresa</th><th class="text-end">Despesas pagas</th><th class="text-end">Resultado</th>
+        </tr></thead>
+        <tbody>
+          {% for l in linhas %}
+          <tr>
+            <td>{{ l.mes }}</td>
+            <td class="text-end">{{ l.entradas|brl }}</td>
+            <td class="text-end">{{ l.repasses|brl }}<br><small class="text-muted">{{ l.origem }}</small></td>
+            <td class="text-end">{{ l.retido|brl }}</td>
+            <td class="text-end">{{ l.custos|brl }}</td>
+            <td class="text-end fw-bold {{ 'text-positivo' if l.resultado >= 0 else 'text-negativo' }}">{{ l.resultado|brl }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-3">Sem movimentos.</td></tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr class="fw-bold">
+          <td>Total</td><td class="text-end">{{ total.entradas|brl }}</td><td class="text-end">{{ total.repasses|brl }}</td>
+          <td class="text-end">{{ total.retido|brl }}</td><td class="text-end">{{ total.custos|brl }}</td>
+          <td class="text-end {{ 'text-positivo' if total.resultado >= 0 else 'text-negativo' }}">{{ total.resultado|brl }}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+<p class="text-muted small mt-2">Fev–mai/2026 usam o valor que o PDF de faturamento deixou na empresa; meses com Folha usam o repasse calculado pela escala
+  (a empresa retém os descontos individuais). Meses sem parto/recebimento não aparecem.</p>
+{% endblock %}

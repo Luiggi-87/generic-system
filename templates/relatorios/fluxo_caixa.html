@@ -1,0 +1,325 @@
+{% extends 'base.html' %}
+{% block title %}Fluxo de Caixa — {{ marca.nome }}{% endblock %}
+{% block page_title %}Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3 col-6">
+        <label class="form-label">Data Inicial</label>
+        <input type="date" name="data_de" class="form-control" value="{{ data_de.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-md-3 col-6">
+        <label class="form-label">Data Final</label>
+        <input type="date" name="data_ate" class="form-control" value="{{ data_ate.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-md-3 col-8">
+        <label class="form-label">Forma de Pagamento</label>
+        <select name="forma_pagamento" class="form-select">
+          <option value="">Todas as formas</option>
+          {% for chave, label in formas_label.items() %}
+          <option value="{{ chave }}" {% if forma_filtro == chave %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 col-4">
+        <button class="btn btn-primary w-100"><i class="bi bi-filter me-1"></i>Aplicar</button>
+      </div>
+      {% if forma_filtro %}
+      <div class="col-12">
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge" style="background:var(--cm-accent);color:var(--cm-primary-dark);font-size:.85rem;padding:.4rem .8rem">
+            <i class="bi bi-funnel-fill me-1"></i>
+            Filtrando por: <strong>{{ formas_label.get(forma_filtro, forma_filtro) }}</strong>
+          </span>
+          <a href="{{ url_for('relatorios.fluxo_caixa') }}?data_de={{ data_de.strftime('%Y-%m-%d') }}&data_ate={{ data_ate.strftime('%Y-%m-%d') }}"
+             class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-x me-1"></i>Limpar filtro
+          </a>
+        </div>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% if repasses_anteriores > 0 %}
+<div class="alert alert-info d-flex gap-2 align-items-start">
+  <i class="bi bi-info-circle fs-5"></i>
+  <div>Este período inclui <strong>{{ repasses_anteriores|brl }}</strong> de repasses da Folha de <strong>meses anteriores</strong>
+    (lançados na data em que a folha foi fechada). O dinheiro correspondente entrou nesses meses anteriores, por isso o saldo do período
+    pode ficar negativo sem ser prejuízo. Para ver quanto <strong>fica na empresa</strong>, use
+    <a href="{{ url_for('relatorios.caixa_empresa') }}">Caixa da Empresa</a>.</div>
+</div>
+{% endif %}
+
+<!-- Resumo -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#1b5e20,#2e7d32)">
+      <div class="label">Entradas Efetivas</div>
+      <div class="value" style="font-size:1.3rem">{{ total_entradas|brl }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#b71c1c,#c62828)">
+      <div class="label">Saídas Efetivas</div>
+      <div class="value" style="font-size:1.3rem">{{ total_saidas|brl }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,{{ '#1565c0' if saldo_final >= 0 else '#6a1b9a' }},{{ '#0d47a1' if saldo_final >= 0 else '#4a148c' }})">
+      <div class="label">Saldo do Período</div>
+      <div class="value" style="font-size:1.3rem">{{ saldo_final|brl }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#e65100,#bf360c)">
+      <div class="label">A Receber (Previsto)</div>
+      <div class="value" style="font-size:1.3rem">{{ total_prev_receber|brl }}</div>
+      <div class="sub">A Pagar: {{ total_prev_pagar|brl }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Movimentações reais -->
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-graph-up me-1"></i>Movimentação Real por Dia</span>
+        <small class="text-muted fw-normal">Clique no dia para ver os detalhes</small>
+      </div>
+      <div class="card-body p-0">
+        {% if linhas %}
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th style="width:30px"></th>
+                <th>Data</th>
+                <th class="text-end">Entradas</th>
+                <th class="text-end">Saídas</th>
+                <th class="text-end">Saldo do Dia</th>
+                <th class="text-end">Saldo Acum.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in linhas %}
+              {% set idx = loop.index %}
+
+              {# ── Linha de resumo do dia ── #}
+              <tr class="table-light fw-semibold" style="cursor:pointer"
+                  data-bs-toggle="collapse" data-bs-target="#det-{{ idx }}"
+                  aria-expanded="false">
+                <td class="text-center text-muted">
+                  <i class="bi bi-chevron-right toggle-icon" style="font-size:.75rem;transition:.2s"></i>
+                </td>
+                <td>{{ l.dia[8:] }}/{{ l.dia[5:7] }}/{{ l.dia[:4] }}</td>
+                <td class="text-end text-positivo">{{ l.entradas|brl if l.entradas else '—' }}</td>
+                <td class="text-end text-negativo">{{ l.saidas|brl if l.saidas else '—' }}</td>
+                <td class="text-end {{ 'text-positivo' if l.saldo_dia >= 0 else 'text-negativo' }}">
+                  {{ l.saldo_dia|brl }}
+                </td>
+                <td class="text-end {{ 'text-positivo' if l.saldo_acumulado >= 0 else 'text-negativo' }}">
+                  {{ l.saldo_acumulado|brl }}
+                </td>
+              </tr>
+
+              {# ── Detalhes do dia (colapsável) ── #}
+              <tr class="p-0 border-0">
+                <td colspan="6" class="p-0 border-0">
+                  <div class="collapse" id="det-{{ idx }}">
+                    <div class="px-3 py-2" style="background:#fdf8fb">
+
+                      {% if l.itens_entrada %}
+                      <div class="mb-2">
+                        <div class="text-muted small fw-bold mb-1">
+                          <i class="bi bi-arrow-down-circle-fill me-1" style="color:#1b5e20"></i>
+                          Entradas ({{ l.itens_entrada|length }})
+                        </div>
+                        <table class="table table-sm mb-0" style="font-size:.83rem">
+                          <thead style="background:#e8f5e9">
+                            <tr>
+                              <th>Descrição / Cliente</th>
+                              <th>Forma</th>
+                              <th class="text-end">Bruto</th>
+                              <th class="text-end">Taxa</th>
+                              <th class="text-end">Líquido</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for it in l.itens_entrada %}
+                            <tr>
+                              <td>
+                                <span class="fw-semibold">{{ it.descricao }}</span>
+                                {% if it.cliente %}
+                                <br><small class="text-muted">
+                                  <i class="bi bi-person me-1"></i>{{ it.cliente }}
+                                </small>
+                                {% endif %}
+                              </td>
+                              <td>
+                                {{ it.forma }}
+                                {% if it.parcelas > 1 %}
+                                  <span class="badge bg-secondary">{{ it.parcelas }}×</span>
+                                {% endif %}
+                              </td>
+                              <td class="text-end">{{ it.valor_bruto|brl }}</td>
+                              <td class="text-end">
+                                {% if it.tem_taxa %}
+                                  <span class="text-danger small">−{{ it.taxa_pct }}%</span>
+                                {% else %}
+                                  <span class="text-muted small">—</span>
+                                {% endif %}
+                              </td>
+                              <td class="text-end text-positivo fw-bold">{{ it.valor_liquido|brl }}</td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      {% endif %}
+
+                      {% if l.itens_saida %}
+                      <div>
+                        <div class="text-muted small fw-bold mb-1">
+                          <i class="bi bi-arrow-up-circle-fill me-1" style="color:#b71c1c"></i>
+                          Saídas ({{ l.itens_saida|length }})
+                        </div>
+                        <table class="table table-sm mb-0" style="font-size:.83rem">
+                          <thead style="background:#fdecea">
+                            <tr>
+                              <th>Descrição</th>
+                              <th>Forma</th>
+                              <th class="text-end" colspan="2">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for it in l.itens_saida %}
+                            <tr>
+                              <td>{{ it.descricao }}</td>
+                              <td>{{ it.forma }}</td>
+                              <td class="text-end text-negativo fw-bold" colspan="2">{{ it.valor_liquido|brl }}</td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      {% endif %}
+
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="fw-bold table-light">
+                <td></td>
+                <td>TOTAL</td>
+                <td class="text-end text-positivo">{{ total_entradas|brl }}</td>
+                <td class="text-end text-negativo">{{ total_saidas|brl }}</td>
+                <td class="text-end {{ 'text-positivo' if saldo_final >= 0 else 'text-negativo' }}">{{ saldo_final|brl }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-graph-down" style="font-size:2.5rem;opacity:.2"></i>
+          <p class="mt-2">Nenhuma movimentação efetiva no período.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Previsão -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header fw-bold text-positivo"><i class="bi bi-arrow-down-circle me-1"></i>Previsão de Recebimentos</div>
+      <div class="card-body p-0">
+        {% if previsao_receber %}
+        <ul class="list-group list-group-flush">
+          {% for l in previsao_receber %}
+          <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+            <div>
+              <small class="d-block fw-semibold">{{ l.descricao }}</small>
+              <small class="text-muted">Venc: {{ l.data_vencimento|data_br }}</small>
+              {% if l.vencido %}<span class="badge badge-vencido ms-1">Vencido</span>{% endif %}
+            </div>
+            <span class="text-positivo fw-bold small">{{ l.valor|brl }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="p-2 text-end fw-bold" style="background:#e8f5e9">
+          Total: <span class="text-positivo">{{ total_prev_receber|brl }}</span>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3 small">Nenhum recebimento previsto.</div>
+        {% endif %}
+        {% if sem_venc_rec %}
+        <div class="px-3 py-2 border-top" style="background:#fffde7;font-size:.78rem">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+          <strong>{{ sem_venc_rec|length }}</strong> pendente(s) sem data de vencimento
+          <span class="float-end fw-bold">{{ total_sem_venc_rec|brl }}</span>
+          <div class="text-muted mt-1">Não entram na previsão — defina vencimentos para controle completo.</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-bold text-negativo"><i class="bi bi-arrow-up-circle me-1"></i>Previsão de Pagamentos</div>
+      <div class="card-body p-0">
+        {% if previsao_pagar %}
+        <ul class="list-group list-group-flush">
+          {% for l in previsao_pagar %}
+          <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+            <div>
+              <small class="d-block fw-semibold">{{ l.descricao }}</small>
+              <small class="text-muted">Venc: {{ l.data_vencimento|data_br }}</small>
+              {% if l.vencido %}<span class="badge badge-vencido ms-1">Vencido</span>{% endif %}
+            </div>
+            <span class="text-negativo fw-bold small">{{ l.valor|brl }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="p-2 text-end fw-bold" style="background:#fdecea">
+          Total: <span class="text-negativo">{{ total_prev_pagar|brl }}</span>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3 small">Nenhum pagamento previsto.</div>
+        {% endif %}
+        {% if sem_venc_desp %}
+        <div class="px-3 py-2 border-top" style="background:#fffde7;font-size:.78rem">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+          <strong>{{ sem_venc_desp|length }}</strong> despesa(s) pendente(s) sem vencimento
+          <span class="float-end fw-bold text-negativo">{{ total_sem_venc_desp|brl }}</span>
+          <div class="text-muted mt-1">Não entram na previsão — defina vencimentos para controle completo.</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Gira a seta ao expandir/colapsar cada dia
+document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const icon = this.querySelector('.toggle-icon');
+    if (!icon) return;
+    const target = document.querySelector(this.getAttribute('data-bs-target'));
+    target.addEventListener('shown.bs.collapse',  () => icon.style.transform = 'rotate(90deg)', {once:true});
+    target.addEventListener('hidden.bs.collapse', () => icon.style.transform = 'rotate(0deg)',  {once:true});
+  });
+});
+</script>
+{% endblock %}

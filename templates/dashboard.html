@@ -1,0 +1,584 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — {{ marca.nome }}{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* tabela de gestantes: espaçamento mínimo (cabeçalho, linhas e entre colunas) */
+  .tabela-gestantes th, .tabela-gestantes td { padding: .15rem .25rem !important; line-height: 1.15; }
+  .tabela-gestantes thead th { vertical-align: middle; }
+  .tabela-gestantes .btn { padding: .1rem .35rem !important; }
+  .tabela-gestantes td:nth-child(3), .tabela-gestantes td:nth-child(4) { white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Linha 1: Cards de resumo -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,var(--cm-primary),var(--cm-primary-dark))">
+      <div class="label"><i class="bi bi-people me-1"></i>Clientes Ativas</div>
+      <div class="value">{{ total_clientes_ativos }}</div>
+      <div class="sub">{{ total_clientes_pos_parto }} puérperas</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,var(--cm-secondary),#4a148c)">
+      <div class="label"><i class="bi bi-calendar-check me-1"></i>Atendimentos no Mês</div>
+      <div class="value">{{ atendimentos_mes }}</div>
+      <div class="sub">{{ atendimentos_agendados }} agendados</div>
+    </div>
+  </div>
+  {% if pode('financeiro') %}
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#1565c0,#0d47a1)">
+      <div class="label"><i class="bi bi-cash-coin me-1"></i>Receitas — Caixa (Mês)</div>
+      <div class="value" style="font-size:1.3rem">{{ receitas_caixa|brl }}</div>
+      <div class="sub">Resultado: {{ resultado_caixa|brl }}</div>
+    </div>
+  </div>
+  {% endif %}
+  {# OCULTO — Regime de Competência (mantido para uso futuro)
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#00695c,#004d40)">
+      <div class="label"><i class="bi bi-graph-up me-1"></i>Receitas — Competência (Mês)</div>
+      <div class="value" style="font-size:1.3rem">{{ receitas_competencia|brl }}</div>
+      <div class="sub">Resultado: {{ resultado_competencia|brl }}</div>
+    </div>
+  </div>
+  #}
+</div>
+
+{% if notas_func and (notas_func.qtd_ok or notas_func.qtd_div) %}
+<div class="d-flex flex-wrap gap-2 mb-3">
+  {% if notas_func.qtd_ok %}
+  <a href="{{ url_for('notas_func.index') }}" class="alert alert-success mb-0 py-2 px-3 text-decoration-none d-flex align-items-center gap-2">
+    <i class="bi bi-patch-check-fill"></i><strong>{{ notas_func.qtd_ok }}</strong> nota(s) de prestadora de serviço conferida(s): pode pagar ({{ notas_func.valor_ok|brl }})
+  </a>
+  {% endif %}
+  {% if notas_func.qtd_div %}
+  <a href="{{ url_for('notas_func.index') }}" class="alert alert-warning mb-0 py-2 px-3 text-decoration-none d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle-fill"></i><strong>{{ notas_func.qtd_div }}</strong> nota(s) de prestadora de serviço com valor divergente
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if alerta_36 and pode('financeiro') %}
+<!-- Alerta: entrou na 36ª semana com pagamento pendente -->
+<div class="card mb-4" style="border:2px solid #c62828;background:#ffebee">
+  <div class="card-header fw-bold" style="background:#c62828;color:#fff">
+    <i class="bi bi-exclamation-octagon-fill me-1"></i>
+    {{ alerta_36|length }} gestante(s) na 36ª semana ou mais com o pagamento pendente
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for c, valor in alerta_36 %}
+    <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2" style="background:transparent">
+      <span>
+        <a href="{{ url_for('clientes.detail', id=c.id) }}" class="fw-bold text-decoration-none" style="color:#b71c1c">{{ c.nome }}</a>
+        <span class="ms-2 badge bg-danger">{{ c.semanas_dias_gestacao }}</span>
+        <small class="text-muted ms-2">DPP {{ c.data_prevista_parto|data_br }}</small>
+      </span>
+      <span class="fw-bold" style="color:#b71c1c">{{ valor|brl }} pendente</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Linha 2: Alertas e regime comparativo -->
+<div class="row g-3 mb-4">
+  {% if contas_vencidas > 0 or a_pagar_vencidas > 0 or materiais_baixo_estoque > 0 or partos_sem_pagamento_qtd > 0 %}
+  <div class="col-12">
+    <div class="d-flex flex-wrap gap-2">
+      {% if partos_sem_pagamento_qtd > 0 and pode('financeiro') %}
+      <a href="{{ url_for('clientes.index', pagamento='pendente') }}" class="alert alert-danger mb-0 py-2 px-3 text-decoration-none d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-octagon-fill"></i>
+        <strong>{{ partos_sem_pagamento_qtd }}</strong> cliente(s) já pariu e não efetuou o pagamento ({{ partos_sem_pagamento_valor|brl }} pendente)
+      </a>
+      {% endif %}
+      {% if contas_vencidas > 0 and pode('financeiro') %}
+      <a href="{{ url_for('financeiro.receber') }}?status=pendente" class="alert alert-danger mb-0 py-2 px-3 text-decoration-none d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>{{ contas_vencidas }}</strong> conta(s) a receber vencida(s)
+      </a>
+      {% endif %}
+      {% if a_pagar_vencidas > 0 and pode('financeiro') %}
+      <a href="{{ url_for('financeiro.pagar') }}?status=pendente" class="alert alert-warning mb-0 py-2 px-3 text-decoration-none d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>{{ a_pagar_vencidas }}</strong> conta(s) a pagar vencida(s)
+      </a>
+      {% endif %}
+      {% if materiais_baixo_estoque > 0 %}
+      <a href="{{ url_for('materiais.index') }}?filtro=baixo" class="alert alert-info mb-0 py-2 px-3 text-decoration-none d-flex align-items-center gap-2">
+        <i class="bi bi-box-seam"></i>
+        <strong>{{ materiais_baixo_estoque }}</strong> material(is) com estoque baixo
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Próximos partos -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-balloon-heart me-1" style="color:var(--cm-primary)"></i>Próximos Partos</span>
+        <a href="{{ url_for('clientes.index') }}?status=ativa" class="btn btn-sm btn-outline-primary">Ver todas</a>
+      </div>
+      <div class="card-body p-0">
+        {% if proximos_partos %}
+        <ul class="list-group list-group-flush">
+          {% for c in proximos_partos %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <a href="{{ url_for('clientes.detail', id=c.id) }}" class="text-decoration-none fw-semibold">{{ c.nome }}</a>
+              {% if c.semanas_gestacao %}
+              <small class="text-muted ms-2">{{ c.semanas_gestacao }}sem</small>
+              {% endif %}
+            </div>
+            <span class="badge bg-pink text-dark" style="background:var(--cm-accent)!important">
+              {{ c.data_prevista_parto|data_br }}
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="text-center text-muted py-4">Nenhum parto previsto nos próximos dias.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Linha 3: Gestantes em acompanhamento -->
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+          <i class="bi bi-heart-pulse me-1" style="color:var(--cm-primary)"></i>
+          Gestantes em Acompanhamento
+          <span class="badge ms-1" style="background:var(--cm-accent);color:var(--cm-primary-dark)">{{ gestantes|length }}</span>
+        </span>
+        <a href="{{ url_for('clientes.index') }}?status=ativa" class="btn btn-sm btn-outline-primary">Ver todas</a>
+      </div>
+      <div class="card-body p-0">
+        {% if gestantes %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 tabela-gestantes" style="font-size:.8rem">
+            <thead>
+              <tr>
+                <th rowspan="2" class="align-middle border-end">Nome</th>
+                <th rowspan="2" class="align-middle text-center">Sem.</th>
+                <th rowspan="2" class="align-middle">DPP</th>
+                <th colspan="2" class="text-center border-start border-end"
+                    style="background:#e3f2fd;color:#1565c0;font-size:.75rem;padding:.4rem">
+                  1ª Consulta - EO
+                </th>
+                <th colspan="2" class="text-center border-end"
+                    style="background:#f3e5f5;color:#6a1b9a;font-size:.75rem;padding:.4rem">
+                  2ª Consulta - EO
+                </th>
+                <th rowspan="2" class="align-middle">Médico pré-natalista</th>
+                <th rowspan="2" class="align-middle">Grupo / Plantão</th>
+                <th rowspan="2" class="align-middle">Hospital</th>
+                <th rowspan="2" class="align-middle">Contrato</th>
+                <th rowspan="2" class="align-middle"></th>
+              </tr>
+              <tr>
+                <th class="border-start" style="background:#e8f4fd;font-size:.72rem;font-weight:600;color:#1565c0">Data</th>
+                <th class="border-end" style="background:#e8f4fd;font-size:.72rem;font-weight:600;color:#1565c0">EO</th>
+                <th style="background:#f8edff;font-size:.72rem;font-weight:600;color:#6a1b9a">Data</th>
+                <th class="border-end" style="background:#f8edff;font-size:.72rem;font-weight:600;color:#6a1b9a">EO</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in gestantes %}
+              {% set c = item.cliente %}
+              {% set semanas = c.semanas_gestacao %}
+              {% set semanas_dias = c.semanas_dias_gestacao %}
+              {% set urgente = semanas is not none and semanas >= 38 %}
+              {% set proximo = semanas is not none and semanas >= 35 and semanas < 38 %}
+              {% set sem_pgto = alerta_36_ids.get(c.id) if pode('financeiro') else None %}   {# pagamento pendente (selo e linha vermelha): só quem tem acesso ao financeiro, como o alerta do topo #}
+              <tr {% if sem_pgto %}style="background:#ffcdd2;box-shadow:inset 4px 0 0 #c62828"{% elif urgente %}style="background:#fff3e0"{% elif proximo %}style="background:#fffde7"{% endif %}>
+                <td class="border-end">
+                  <a href="{{ url_for('clientes.detail', id=c.id) }}"
+                     class="fw-semibold text-decoration-none">{{ c.nome }}</a>
+                  {% if c.ano_referencia %}
+                  <span class="badge bg-light text-dark ms-1" style="font-size:.65rem">{{ c.ano_referencia }}</span>
+                  {% endif %}
+                  {% if sem_pgto %}
+                  <span class="badge bg-danger ms-1" style="font-size:.65rem" title="36ª semana ou mais com pagamento pendente">
+                    <i class="bi bi-exclamation-octagon-fill"></i> pagamento pendente · {{ sem_pgto|brl }}
+                  </span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if semanas_dias is not none %}
+                    <span class="fw-bold {% if urgente %}text-danger{% elif proximo %}text-warning{% else %}text-success{% endif %}">
+                      {{ semanas_dias }}
+                    </span>
+                    {% if urgente %}<i class="bi bi-exclamation-circle-fill text-danger ms-1" title="Parto próximo!"></i>{% endif %}
+                  {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="text-muted">{{ c.data_prevista_parto|data_br }}</td>
+                {# 1ª consulta #}
+                {% if item.c1 %}
+                <td class="border-start" style="background:#f0f8ff">
+                  <a href="{{ url_for('atendimentos.detail', id=item.c1.id) }}"
+                     class="text-decoration-none text-muted small">{{ item.c1.data_atendimento|data_br }}</a>
+                </td>
+                <td class="border-end" style="background:#f0f8ff">
+                  <a href="{{ url_for('atendimentos.detail', id=item.c1.id) }}"
+                     class="text-decoration-none small">
+                    {{ item.c1.profissional or '—' }}
+                  </a>
+                </td>
+                {% elif item.ag1 %}
+                <td colspan="2" class="border-start border-end text-center" style="background:#f0f8ff">
+                  <a href="{{ url_for('atendimentos.detail', id=item.ag1.id) }}" class="badge bg-warning text-dark text-decoration-none"
+                     title="Agendada: confirme em Próximos Atendimentos">agendada {{ item.ag1.data_atendimento|data_br }}{% if item.ag1.hora_atendimento %} às {{ item.ag1.hora_atendimento }}{% endif %}</a>
+                </td>
+                {% elif semanas is not none and semanas >= 32 %}
+                <td colspan="2" class="border-start border-end text-center" style="background:#ffcdd2">
+                  <button type="button" class="btn btn-sm px-2 py-1 fw-bold"
+                          style="color:#b71c1c;border:1px solid #c62828;background:#ffebee;font-size:.72rem"
+                          title="Está na {{ semanas }}ª semana e a 1ª consulta ainda não foi agendada"
+                          data-bs-toggle="modal" data-bs-target="#modal-consulta-{{ c.id }}-1">
+                    <i class="bi bi-exclamation-octagon-fill me-1"></i>Agendar 1ª
+                  </button>
+                  <div style="font-size:.65rem;color:#b71c1c">sem 1ª consulta · {{ semanas }}ª sem.</div>
+                </td>
+                {% else %}
+                <td colspan="2" class="border-start border-end text-center" style="background:#f0f8ff">
+                  <button type="button" class="btn btn-sm px-2 py-1"
+                          style="color:#1565c0;border:1px dashed #90caf9;background:#e3f2fd;font-size:.72rem"
+                          data-bs-toggle="modal" data-bs-target="#modal-consulta-{{ c.id }}-1">
+                    <i class="bi bi-plus-lg me-1"></i>Registrar
+                  </button>
+                </td>
+                {% endif %}
+                {# 2ª consulta #}
+                {% if item.c2 %}
+                <td style="background:#fdf5ff">
+                  <a href="{{ url_for('atendimentos.detail', id=item.c2.id) }}"
+                     class="text-decoration-none text-muted small">{{ item.c2.data_atendimento|data_br }}</a>
+                </td>
+                <td class="border-end" style="background:#fdf5ff">
+                  <a href="{{ url_for('atendimentos.detail', id=item.c2.id) }}"
+                     class="text-decoration-none small">
+                    {{ item.c2.profissional or '—' }}
+                  </a>
+                </td>
+                {% elif item.ag2 %}
+                <td colspan="2" class="border-start border-end text-center" style="background:#fdf5ff">
+                  <a href="{{ url_for('atendimentos.detail', id=item.ag2.id) }}" class="badge bg-warning text-dark text-decoration-none"
+                     title="Agendada: confirme em Próximos Atendimentos">agendada {{ item.ag2.data_atendimento|data_br }}{% if item.ag2.hora_atendimento %} às {{ item.ag2.hora_atendimento }}{% endif %}</a>
+                </td>
+                {% elif item.c1 and semanas is not none and semanas >= 34 %}
+                <td colspan="2" class="border-start border-end text-center" style="background:#ffcdd2">
+                  <button type="button" class="btn btn-sm px-2 py-1 fw-bold"
+                          style="color:#b71c1c;border:1px solid #c62828;background:#ffebee;font-size:.72rem"
+                          title="Está na {{ semanas }}ª semana e a 2ª consulta ainda não foi agendada"
+                          data-bs-toggle="modal" data-bs-target="#modal-consulta-{{ c.id }}-2">
+                    <i class="bi bi-exclamation-octagon-fill me-1"></i>Agendar 2ª
+                  </button>
+                  <div style="font-size:.65rem;color:#b71c1c">sem 2ª consulta · {{ semanas }}ª sem.</div>
+                </td>
+                {% elif item.c1 %}
+                <td colspan="2" class="border-start border-end text-center" style="background:#fdf5ff">
+                  <button type="button" class="btn btn-sm px-2 py-1"
+                          style="color:#6a1b9a;border:1px dashed #ce93d8;background:#f3e5f5;font-size:.72rem"
+                          data-bs-toggle="modal" data-bs-target="#modal-consulta-{{ c.id }}-2">
+                    <i class="bi bi-plus-lg me-1"></i>Registrar
+                  </button>
+                </td>
+                {% else %}
+                <td colspan="2" class="border-end text-center" style="background:{{ '#ffcdd2' if semanas is not none and semanas >= 34 else '#fdf5ff' }}">
+                  {% if semanas is not none and semanas >= 34 %}
+                  <span class="fw-bold" style="font-size:.7rem;color:#b71c1c" title="Está na {{ semanas }}ª semana">
+                    <i class="bi bi-exclamation-octagon-fill"></i> 2ª consulta pendente · {{ semanas }}ª sem.
+                  </span>
+                  {% else %}
+                  <span class="text-muted" style="font-size:.72rem">após 1ª</span>
+                  {% endif %}
+                </td>
+                {% endif %}
+                <td class="text-muted small">{{ c.medico_grupo or '—' }}</td>
+                <td class="text-muted small">{{ c.grupo_parto or '—' }}</td>
+                <td class="text-muted small">{{ c.hospital_parto or '—' }}</td>
+                <td>
+                  {% if c.contrato_status %}
+                  <span class="badge {{ c.contrato_status|cor_contrato }}" style="font-size:.68rem">{{ c.contrato_status[:12] }}</span>
+                  {% else %}<span class="text-muted small">—</span>{% endif %}
+                </td>
+                <td>
+                  <a href="{{ url_for('clientes.detail', id=c.id) }}"
+                     class="btn btn-sm btn-outline-secondary" title="Ver perfil">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-heart-pulse" style="font-size:2.5rem;opacity:.2"></i>
+          <p class="mt-2">Nenhuma gestante em acompanhamento.</p>
+          <a href="{{ url_for('clientes.novo') }}" class="btn btn-primary btn-sm">Cadastrar Paciente</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modais de registro rápido de consulta EO (fora do card para não quebrar o layout) #}
+{% for item in gestantes %}
+{% set c = item.cliente %}
+{% if not item.c1 and not item.ag1 %}
+<div class="modal fade" id="modal-consulta-{{ c.id }}-1" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#e3f2fd;border-bottom:1px solid #90caf9">
+        <h6 class="modal-title" style="color:#1565c0;font-size:.9rem">
+          <i class="bi bi-1-circle me-1"></i>1ª Consulta EO — {{ c.nome.split()[0] }}
+        </h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('atendimentos.registrar_consulta_rapida') }}">
+        <input type="hidden" name="cliente_id" value="{{ c.id }}">
+        <div class="modal-body py-3">
+          <div class="row g-2 mb-3">
+            <div class="col-7">
+              <label class="form-label small fw-bold">Data da Consulta *</label>
+              <input type="date" name="data_atendimento" class="form-control dp-hoje" required>
+            </div>
+            <div class="col-5">
+              <label class="form-label small fw-bold">Horário</label>
+              <input type="time" name="hora_atendimento" class="form-control">
+            </div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label small fw-bold">Profissional / EO</label>
+            <input type="text" name="profissional" class="form-control"
+                   placeholder="Nome da enfermeira obstétrica">
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Agendar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% elif item.c1 and not item.c2 and not item.ag2 %}
+<div class="modal fade" id="modal-consulta-{{ c.id }}-2" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#f3e5f5;border-bottom:1px solid #ce93d8">
+        <h6 class="modal-title" style="color:#6a1b9a;font-size:.9rem">
+          <i class="bi bi-2-circle me-1"></i>2ª Consulta EO — {{ c.nome.split()[0] }}
+        </h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('atendimentos.registrar_consulta_rapida') }}">
+        <input type="hidden" name="cliente_id" value="{{ c.id }}">
+        <div class="modal-body py-3">
+          <div class="row g-2 mb-3">
+            <div class="col-7">
+              <label class="form-label small fw-bold">Data da Consulta *</label>
+              <input type="date" name="data_atendimento" class="form-control dp-hoje" required>
+            </div>
+            <div class="col-5">
+              <label class="form-label small fw-bold">Horário</label>
+              <input type="time" name="hora_atendimento" class="form-control">
+            </div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label small fw-bold">Profissional / EO</label>
+            <input type="text" name="profissional" class="form-control"
+                   placeholder="Nome da enfermeira obstétrica">
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-check-lg me-1"></i>Registrar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<!-- Linha 4: Próximos atendimentos -->
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-calendar-week me-1"></i>Próximos Atendimentos</span>
+        <a href="{{ url_for('atendimentos.novo') }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-lg me-1"></i>Novo Atendimento
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if proximos_atendimentos %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Tipo</th><th>Profissional</th><th>Status</th><th class="text-end">Ações</th></tr></thead>
+            <tbody>
+              {% for a in proximos_atendimentos %}
+              {% set atrasado = a.data_atendimento < hoje %}
+              <tr {% if atrasado %}style="background:#fff8e1"{% endif %}>
+                <td>{{ a.data_atendimento|data_br }}</td>
+                <td>{{ a.hora_atendimento or '—' }}</td>
+                <td>
+                  <a href="{{ url_for('clientes.detail', id=a.cliente_id) }}" class="text-decoration-none">
+                    {{ a.cliente.nome }}
+                  </a>
+                </td>
+                <td><span class="text-capitalize">{{ a.tipo }}</span></td>
+                <td class="text-muted small">{{ a.profissional or '—' }}</td>
+                <td>
+                  <span class="badge bg-warning text-dark">Agendado</span>
+                  {% if atrasado %}<span class="badge bg-danger">data passada</span>{% endif %}
+                </td>
+                <td class="text-end text-nowrap">
+                  <form method="post" action="{{ url_for('atendimentos.realizar', id=a.id) }}" id="conf-at-{{ a.id }}" class="d-inline">
+                    <input type="hidden" name="next" value="dashboard">
+                    <button type="button" class="btn btn-sm btn-success" title="Confirmar: o atendimento foi realizado"
+                            onclick="confirmar('Confirmar que o atendimento de {{ a.cliente.nome|e }} foi realizado?', 'conf-at-{{ a.id }}')">
+                      <i class="bi bi-check-lg"></i> Confirmar
+                    </button>
+                  </form>
+                  <button type="button" class="btn btn-sm btn-outline-primary" title="Remarcar"
+                          data-bs-toggle="modal" data-bs-target="#modal-remarcar"
+                          data-id="{{ a.id }}" data-nome="{{ a.cliente.nome }}"
+                          data-data="{{ a.data_atendimento.strftime('%Y-%m-%d') }}" data-hora="{{ a.hora_atendimento or '' }}">
+                    <i class="bi bi-calendar2-week"></i> Remarcar
+                  </button>
+                  <a href="{{ url_for('atendimentos.detail', id=a.id) }}" class="btn btn-sm btn-outline-secondary" title="Ver">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-calendar-x" style="font-size:2rem;opacity:.3"></i>
+          <p class="mt-2">Nenhum atendimento agendado.</p>
+          <a href="{{ url_for('atendimentos.novo') }}" class="btn btn-primary btn-sm">Agendar Agora</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if pode('financeiro') %}
+<!-- Linha 5: Resumo do mês (regime de caixa) -->
+<div class="row g-3 mt-1">
+  <!-- Resumo Caixa -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Resumo — Mês Atual (Regime de Caixa)</div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th></th><th>Regime de Caixa</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="fw-bold text-success">Receitas</td>
+                <td>{{ receitas_caixa|brl }}</td>
+              </tr>
+              <tr>
+                <td class="fw-bold text-danger">Despesas</td>
+                <td>{{ despesas_caixa|brl }}</td>
+              </tr>
+              <tr class="table-light">
+                <td class="fw-bold">Resultado</td>
+                <td class="{{ 'text-positivo' if resultado_caixa >= 0 else 'text-negativo' }}">
+                  {{ resultado_caixa|brl }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {# OCULTO — coluna Regime de Competência (mantida para uso futuro)
+        receitas_competencia / despesas_competencia / resultado_competencia
+        #}
+        <div class="mt-3 d-flex gap-2">
+          <a href="{{ url_for('relatorios.dre') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-bar-chart-line me-1"></i>Ver DRE Completo
+          </a>
+          <a href="{{ url_for('relatorios.fluxo_caixa') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-graph-up-arrow me-1"></i>Fluxo de Caixa
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('show.bs.modal', function(e) {
+  const input = e.target.querySelector('.dp-hoje');
+  if (input && !input.value) {
+    input.value = new Date().toISOString().split('T')[0];
+  }
+});
+</script>
+
+<!-- Modal: remarcar atendimento -->
+<div class="modal fade" id="modal-remarcar" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" style="font-size:.9rem"><i class="bi bi-calendar2-week me-1"></i>Remarcar — <span id="remarcar-nome"></span></h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" id="form-remarcar">
+        <input type="hidden" name="next" value="dashboard">
+        <div class="modal-body py-3">
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Nova data *</label>
+            <input type="date" name="data_atendimento" id="remarcar-data" class="form-control" required>
+          </div>
+          <div class="mb-1">
+            <label class="form-label small fw-bold">Hora</label>
+            <input type="time" name="hora_atendimento" id="remarcar-hora" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Remarcar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+document.getElementById('modal-remarcar').addEventListener('show.bs.modal', function (ev) {
+  var b = ev.relatedTarget;
+  document.getElementById('remarcar-nome').textContent = b.dataset.nome;
+  document.getElementById('remarcar-data').value = b.dataset.data;
+  document.getElementById('remarcar-hora').value = b.dataset.hora || '';
+  document.getElementById('form-remarcar').action = '/atendimentos/' + b.dataset.id + '/remarcar';
+});
+</script>
+{% endblock %}

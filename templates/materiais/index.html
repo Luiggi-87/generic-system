@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Materiais — {{ marca.nome }}{% endblock %}
+{% block page_title %}Materiais e Estoque{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('materiais.novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Material
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label">Buscar</label>
+        <input type="text" name="q" class="form-control" placeholder="Nome do material..." value="{{ q }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Filtro</label>
+        <select name="filtro" class="form-select">
+          <option value="">Todos</option>
+          <option value="baixo" {% if filtro == 'baixo' %}selected{% endif %}>Estoque Baixo</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-outline-primary w-100"><i class="bi bi-search me-1"></i>Filtrar</button>
+      </div>
+      {% if q or filtro %}
+      <div class="col-md-1">
+        <a href="{{ url_for('materiais.index') }}" class="btn btn-outline-secondary w-100">✕</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">{{ materiais|length }} material(is)</div>
+  <div class="card-body p-0">
+    {% if materiais %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Código</th><th>Nome</th><th>Unidade</th><th>Valor Unit.</th><th>Qtd. Atual</th><th>Qtd. Mínima</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for m in materiais %}
+          <tr {% if m.estoque_baixo %}class="table-warning"{% endif %}>
+            <td><code>{{ m.codigo or '—' }}</code></td>
+            <td class="fw-semibold">
+              {{ m.nome }}
+              {% if m.estoque_baixo %}
+              <span class="badge bg-danger ms-1">Estoque Baixo</span>
+              {% endif %}
+            </td>
+            <td>{{ m.unidade_medida }}</td>
+            <td>{{ m.valor_unitario|brl }}</td>
+            <td class="{{ 'text-danger fw-bold' if m.estoque_baixo else 'text-success fw-bold' }}">
+              {{ m.quantidade_atual }} {{ m.unidade_medida }}
+            </td>
+            <td class="text-muted">{{ m.quantidade_minima }} {{ m.unidade_medida }}</td>
+            <td>
+              {% if m.ativo %}<span class="badge bg-success">Ativo</span>
+              {% else %}<span class="badge bg-secondary">Inativo</span>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('materiais.movimentar', id=m.id) }}" class="btn btn-sm btn-outline-success" title="Movimentar Estoque">
+                  <i class="bi bi-arrow-left-right"></i>
+                </a>
+                <a href="{{ url_for('materiais.editar', id=m.id) }}" class="btn btn-sm btn-outline-primary" title="Editar">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{{ url_for('materiais.excluir', id=m.id) }}" id="del-m-{{ m.id }}">
+                  <button type="button" class="btn btn-sm btn-outline-danger" title="Desativar"
+                    onclick="confirmar('Desativar {{ m.nome }}?','del-m-{{ m.id }}')">
+                    <i class="bi bi-archive"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-box-seam" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhum material encontrado.</p>
+      <a href="{{ url_for('materiais.novo') }}" class="btn btn-primary">Cadastrar Material</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

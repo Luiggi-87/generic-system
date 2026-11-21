@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Importar notas (XML) — {{ marca.nome }}{% endblock %}
+{% block page_title %}Importar notas fiscais (XML){% endblock %}
+
+{% block content %}
+{% set validas = itens|rejectattr('erro')|list %}
+<div class="alert alert-info small py-2">
+  <i class="bi bi-info-circle me-1"></i>Confira os dados lidos de cada arquivo. <strong>Nada foi salvo ainda</strong>: marque as notas que quer cadastrar
+  e clique em <em>Importar selecionadas</em>. Notas já cadastradas vêm desmarcadas.
+</div>
+
+<form method="post" action="{{ url_for('notas_fiscais.importar_xml_confirmar') }}">
+  <input type="hidden" name="total" value="{{ itens|length }}">
+  <div class="card mb-3">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr>
+          <th></th><th>Arquivo</th><th>Nº</th><th>Emissão</th><th>Competência</th><th style="min-width:230px">Cliente</th>
+          <th class="text-end">Valor bruto</th><th class="text-end">ISS</th><th>Situação</th>
+        </tr></thead>
+        <tbody>
+          {% for d in itens %}
+          {% set i = loop.index0 %}
+          {% if d.erro %}
+          <tr class="table-danger">
+            <td></td><td class="small">{{ d.arquivo }}</td><td colspan="7" class="small text-danger"><i class="bi bi-x-circle me-1"></i>{{ d.erro }}</td>
+          </tr>
+          {% else %}
+          <tr {% if d.duplicada %}class="table-warning"{% endif %}>
+            <td><input type="checkbox" class="form-check-input" name="sel_{{ i }}" {% if not d.duplicada and d.cliente_id %}checked{% endif %}></td>
+            <td class="small text-muted">{{ d.arquivo }}
+              <input type="hidden" name="chave_{{ i }}" value="{{ d.chave }}"><input type="hidden" name="aliquota_{{ i }}" value="{{ d.aliquota or '' }}"></td>
+            <td><input type="text" name="numero_{{ i }}" class="form-control form-control-sm" style="width:90px" value="{{ d.numero }}"></td>
+            <td><input type="date" name="emissao_{{ i }}" class="form-control form-control-sm" value="{{ d.data_emissao.isoformat() }}"></td>
+            <td><input type="date" name="competencia_{{ i }}" class="form-control form-control-sm" value="{{ d.competencia.isoformat() if d.competencia else '' }}"></td>
+            <td>
+              <select name="cliente_{{ i }}" class="form-select form-select-sm">
+                <option value="">— Escolha a cliente —</option>
+                {% for c in clientes %}<option value="{{ c.id }}" {% if c.id == d.cliente_id %}selected{% endif %}>{{ rotulo(c) }}</option>{% endfor %}
+              </select>
+              <div class="small text-muted">no XML: {{ d.tomador_nome or '—' }}</div>
+            </td>
+            <td><input type="number" step="0.01" min="0" name="bruto_{{ i }}" class="form-control form-control-sm text-end" style="width:110px" value="{{ '%.2f'|format(d.valor_bruto) }}"></td>
+            <td><input type="number" step="0.01" min="0" name="iss_{{ i }}" class="form-control form-control-sm text-end" style="width:90px"
+                       value="{{ '%.2f'|format(d.valor_iss) if d.valor_iss is not none else '' }}" placeholder="auto"></td>
+            <td class="small">
+              {% if d.duplicada %}<span class="badge bg-warning text-dark">já cadastrada</span>
+              {% elif not d.cliente_id %}<span class="badge bg-secondary">escolha a cliente</span>
+              {% else %}<span class="badge bg-success">pronta</span>{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if validas %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" name="lancar_iss" id="lancar" checked>
+        <label class="form-check-label fw-semibold" for="lancar">Lançar o ISS de cada nota em Contas a Pagar</label>
+        <div class="form-text">Despesa pendente, vencendo no dia 20 do mês seguinte à emissão. Se a nota não trouxer o ISS (Simples Nacional), usa {{ (aliquota_iss * 100)|int }}% do valor bruto.</div>
+      </div>
+      <div class="row">
+        <div class="col-md-5">
+          <label class="form-label small fw-bold">Centro de custo do ISS</label>
+          <select name="centro_custo_id" class="form-select form-select-sm">
+            <option value="">— Selecione —</option>
+            {% for cc in centros %}<option value="{{ cc.id }}" {% if cc.id == cc_imposto_id %}selected{% endif %}>{{ cc.nome }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    {% if validas %}<button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Importar selecionadas</button>{% endif %}
+    <a href="{{ url_for('notas_fiscais.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

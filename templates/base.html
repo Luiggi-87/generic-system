@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ marca.nome }}{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  {% include '_marca_css.html' %}
+  <style>
+    :root { --sidebar-w: 240px; }
+    body { background: var(--cm-bg); font-family: 'Segoe UI', sans-serif; }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; width: var(--sidebar-w);
+      background: var(--cm-sidebar-bg); color: var(--cm-sidebar-text);
+      overflow-y: auto; z-index: 1040;
+      transition: transform .25s ease;
+      display: flex; flex-direction: column;
+    }
+    #sidebar .brand {
+      padding: 1.2rem 1rem; background: var(--cm-primary-dark);
+      font-size: 1rem; font-weight: 700; letter-spacing: .03em;
+      border-bottom: 1px solid rgba(255,255,255,.1); flex-shrink: 0;
+    }
+    #sidebar .brand small { display: block; font-size: .7rem; font-weight: 400; opacity: .7; }
+    #sidebar .nav-label {
+      font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: rgba(255,255,255,.4); padding: .8rem 1rem .3rem;
+    }
+    #sidebar .nav-link {
+      color: rgba(255,255,255,.8); padding: .45rem 1rem; font-size: .88rem;
+      border-radius: 0; display: flex; align-items: center; gap: .5rem;
+    }
+    #sidebar .nav-link:hover, #sidebar .nav-link.active {
+      background: rgba(255,255,255,.12); color: #fff;
+    }
+    #sidebar .nav-link i { width: 1.2rem; text-align: center; }
+    #sidebar .nav-scroll { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+
+
+    /* ── OVERLAY (mobile) ── */
+    #sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 1039;
+    }
+    #sidebar-overlay.show { display: block; }
+
+    /* ── MAIN ── */
+    #main { margin-left: var(--sidebar-w); min-height: 100vh; transition: margin .25s ease; }
+    #topbar {
+      background: #fff; border-bottom: 1px solid var(--cm-accent);
+      padding: .6rem 1rem; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 0; z-index: 900;
+      gap: .5rem;
+    }
+    #topbar h5 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--cm-primary-dark); }
+    .content-area { padding: 1.25rem; }
+
+    /* botão hamburguer — só aparece no mobile */
+    #btn-toggle-sidebar {
+      display: none;
+      background: none; border: none; color: var(--cm-primary-dark);
+      font-size: 1.4rem; padding: 0 .3rem; line-height: 1;
+    }
+
+    /* ── CARDS ── */
+    .card { border: none; border-radius: .75rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .card-header { background: transparent; border-bottom: 1px solid rgba(0,0,0,.07); font-weight: 600; }
+    .stat-card { border-radius: .75rem; color: #fff; padding: 1.25rem; }
+    .stat-card .label { font-size: .78rem; opacity: .85; }
+    .stat-card .value { font-size: 1.7rem; font-weight: 700; line-height: 1.2; }
+    .stat-card .sub { font-size: .8rem; opacity: .8; margin-top: .2rem; }
+
+    /* ── TABLES ── */
+    .table th { font-size: .8rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: .04em; color: #888; border-bottom: 2px solid var(--cm-accent); }
+    .table td { vertical-align: middle; font-size: .9rem; }
+    .table-hover tbody tr:hover { background: #fdf0f5; }
+
+    /* ── BADGES ── */
+    .badge-receita { background: #d4edda; color: #155724; }
+    .badge-despesa { background: #f8d7da; color: #721c24; }
+    .badge-vencido { background: #f8d7da; color: #721c24; }
+
+    /* ── BUTTONS ── */
+    .btn-primary { background: var(--cm-primary); border-color: var(--cm-primary); }
+    .btn-primary:hover { background: var(--cm-primary-dark); border-color: var(--cm-primary-dark); }
+    .btn-outline-primary { color: var(--cm-primary); border-color: var(--cm-primary); }
+    .btn-outline-primary:hover { background: var(--cm-primary); border-color: var(--cm-primary); }
+
+    /* ── FORMS ── */
+    .form-label { font-size: .85rem; font-weight: 600; color: #555; }
+    .form-control:focus, .form-select:focus { border-color: var(--cm-primary); box-shadow: 0 0 0 .2rem rgba(var(--cm-primary-rgb),.15); }
+    .section-title { font-size: .95rem; font-weight: 700; color: var(--cm-primary-dark); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid var(--cm-accent); }
+
+    /* ── MISC ── */
+    .alert { border-radius: .5rem; font-size: .9rem; }
+    .nav-pills .nav-link.active { background: var(--cm-primary); }
+    .nav-pills .nav-link { color: var(--cm-primary); }
+    .text-positivo { color: #1b5e20; font-weight: 600; }
+    .text-negativo { color: #b71c1c; font-weight: 600; }
+
+    /* ── RESPONSIVO MOBILE ── */
+    @media (max-width: 767.98px) {
+      /* sidebar desliza para fora por padrão */
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+
+      /* main ocupa tela toda */
+      #main { margin-left: 0; }
+
+      /* mostra hamburguer */
+      #btn-toggle-sidebar { display: block; }
+
+      /* padding reduzido */
+      .content-area { padding: .85rem; }
+
+      /* stat cards em 2 colunas */
+      .stat-card .value { font-size: 1.3rem; }
+
+      /* topbar compacta */
+      #topbar h5 { font-size: .9rem; }
+
+      /* tabelas: scroll horizontal, letra menor (listas de clientes, dashboard…) */
+      .table-responsive { -webkit-overflow-scrolling: touch; }
+      .table th, .table td { font-size: .72rem; padding: .35rem .4rem; }
+      .table th { letter-spacing: 0; }
+      .table .badge { font-size: .62rem; }
+
+      /* iOS dá zoom ao focar campo com fonte < 16px */
+      .form-control, .form-select { font-size: 16px; }
+
+      /* botões menores */
+      .btn-sm-mobile { font-size: .78rem; padding: .3rem .6rem; }
+
+      /* oculta colunas menos importantes em mobile */
+      .d-mobile-none { display: none !important; }
+    }
+
+    @media (min-width: 768px) {
+      .d-mobile-none { display: table-cell !important; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- OVERLAY mobile -->
+<div id="sidebar-overlay" onclick="fecharSidebar()"></div>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="brand">
+    {% if marca.logo %}<img src="{{ url_for('static', filename=marca.logo) }}" alt="" style="height:26px;margin-right:6px;vertical-align:-6px">{% else %}<i class="bi bi-{{ marca.icone }} me-1" style="color:var(--cm-accent)"></i>{% endif %} {{ marca.nome }}
+    <small>{{ marca.subtitulo }}</small>
+  </div>
+
+  <!-- Usuário / Logout — topo da sidebar -->
+  <div style="padding:.7rem 1rem;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.08)">
+    <div class="d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2" style="overflow:hidden">
+        <i class="bi bi-person-circle flex-shrink-0" style="color:var(--cm-accent);font-size:1.2rem"></i>
+        <div style="font-size:.75rem;line-height:1.3;overflow:hidden">
+          <div class="fw-bold text-truncate" style="color:#fff">{{ current_user.nome }}</div>
+          <div class="text-truncate" style="color:rgba(255,255,255,.5);font-size:.68rem">{{ current_user.email }}</div>
+        </div>
+      </div>
+      <a href="{{ url_for('alterar_senha') }}" class="flex-shrink-0 ms-2"
+         style="color:rgba(255,255,255,.6);font-size:.78rem;text-decoration:none;white-space:nowrap"
+         title="Alterar senha">
+        <i class="bi bi-key"></i>
+      </a>
+      <a href="{{ url_for('logout') }}" class="flex-shrink-0 ms-2"
+         style="color:rgba(255,255,255,.6);font-size:.78rem;text-decoration:none;white-space:nowrap"
+         title="Sair">
+        <i class="bi bi-box-arrow-left"></i>
+        <span class="d-none d-sm-inline"> Sair</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="nav-scroll">
+    {% if pode('dashboard') %}<div class="nav-label">Principal</div>{% endif %}
+{% if pode('dashboard') %}
+    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+    {% endif %}
+
+    {% if pode('clientes') or pode('atendimentos') or pode('cadastros') %}<div class="nav-label">Cadastros</div>{% endif %}
+{% if pode('clientes') %}
+    <a href="{{ url_for('clientes.index') }}" class="nav-link {% if request.endpoint and 'clientes' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-people"></i> Clientes
+    </a>
+    {% endif %}
+{% if pode('atendimentos') %}
+    <a href="{{ url_for('atendimentos.index') }}" class="nav-link {% if request.endpoint and 'atendimentos' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-calendar-check"></i> Atendimentos
+    </a>
+    {% endif %}
+{% if pode('cadastros') %}
+    <a href="{{ url_for('planos.index') }}" class="nav-link {% if request.endpoint and 'planos' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-file-earmark-medical"></i> Planos de Contrato
+    </a>
+    {% endif %}
+{% if pode('cadastros') %}
+    <a href="{{ url_for('procedimentos.index') }}" class="nav-link {% if request.endpoint and 'procedimentos' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-clipboard2-pulse"></i> Procedimentos
+    </a>
+    {% endif %}
+{% if pode('cadastros') %}
+    <a href="{{ url_for('materiais.index') }}" class="nav-link {% if request.endpoint and 'materiais' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-box-seam"></i> Materiais
+    </a>
+    {% endif %}
+{% if pode('cadastros') %}
+    <a href="{{ url_for('centros_custo.index') }}" class="nav-link {% if request.endpoint and 'centros_custo' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-diagram-3"></i> Centros de Custo
+    </a>
+    {% endif %}
+
+    {% if pode('financeiro') or pode('notas_fiscais') or pode('iss') or pode('relatorios') or pode('faturamento') %}<div class="nav-label">Financeiro</div>{% endif %}
+{% if pode('financeiro') %}
+    <a href="{{ url_for('financeiro.lancamentos') }}" class="nav-link {% if request.endpoint == 'financeiro.lancamentos' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-journal-text"></i> Lançamentos
+    </a>
+    {% endif %}
+{% if pode('financeiro') %}
+    <a href="{{ url_for('financeiro.receber') }}" class="nav-link {% if request.endpoint == 'financeiro.receber' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-arrow-down-circle"></i> Contas a Receber
+    </a>
+    {% endif %}
+{% if pode('financeiro') %}
+    <a href="{{ url_for('financeiro.pagar') }}" class="nav-link {% if request.endpoint == 'financeiro.pagar' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-arrow-up-circle"></i> Contas a Pagar
+    </a>
+    {% endif %}
+{% if pode('notas_fiscais') %}
+    <a href="{{ url_for('notas_fiscais.index') }}" class="nav-link {% if request.endpoint == 'notas_fiscais.index' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-file-earmark-text"></i> Nota Fiscal
+    </a>
+    {% endif %}
+    {% if pode('iss') %}
+    <a href="{{ url_for('iss_mensal.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('iss_mensal.') %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-percent"></i> ISS do Mês
+    </a>
+    {% endif %}
+{% if pode('relatorios') %}
+    <a href="{{ url_for('relatorios.dre') }}" class="nav-link {% if request.endpoint == 'relatorios.dre' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-bar-chart-line"></i> DRE
+    </a>
+    {% endif %}
+{% if pode('relatorios') %}
+    <a href="{{ url_for('relatorios.fluxo_caixa') }}" class="nav-link {% if request.endpoint == 'relatorios.fluxo_caixa' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-graph-up-arrow"></i> Fluxo de Caixa
+    </a>
+    {% endif %}
+{% if pode('faturamento') %}
+    <a href="{{ url_for('faturamento.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('faturamento.') %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-file-earmark-bar-graph"></i> Relatório de Faturamento
+    </a>
+    {% endif %}
+
+    {% if pode('folha') or pode('notas_funcionarias') or pode('minhas_notas') %}<div class="nav-label">Recursos Humanos</div>{% endif %}
+{% if pode('folha') %}
+    <a href="{{ url_for('folha.index') }}" class="nav-link {% if request.endpoint and 'folha' in request.endpoint %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-people-fill"></i> Folha de Pagamento
+    </a>
+    {% endif %}
+    {% if pode('notas_funcionarias') %}
+    <a href="{{ url_for('notas_func.index') }}" class="nav-link {% if request.endpoint == 'notas_func.index' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-patch-check"></i> Notas das Prestadoras de serviço
+    </a>
+    {% endif %}
+    {% if pode('minhas_notas') %}
+    <a href="{{ url_for('notas_func.minhas') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('notas_func.minhas') %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-file-earmark-arrow-up"></i> Minhas Notas Fiscais
+    </a>
+    {% endif %}
+
+    {% if pode('gerencial') or pode('relatorios') %}<div class="nav-label">Gerência</div>{% endif %}
+{% if pode('gerencial') %}
+    <a href="{{ url_for('gerencial.index') }}" class="nav-link {% if request.endpoint == 'gerencial.index' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-file-earmark-bar-graph"></i> Relatório Gerencial
+    </a>
+    {% endif %}
+{% if pode('gerencial') %}
+    <a href="{{ url_for('contratos_iss.index') }}" class="nav-link {% if request.endpoint == 'contratos_iss.index' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-receipt-cutoff"></i> Contratos × ISS
+    </a>
+    {% endif %}
+{% if pode('gerencial') %}
+    <a href="{{ url_for('gerencial.conta_bancaria') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('gerencial.conta_bancaria') %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-bank"></i> Conta Bancária
+    </a>
+    {% endif %}
+{% if pode('relatorios') %}
+    <a href="{{ url_for('relatorios.caixa_empresa') }}" class="nav-link {% if request.endpoint == 'relatorios.caixa_empresa' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-safe2"></i> Caixa da Empresa
+    </a>
+    {% endif %}
+{% if pode('gerencial') %}
+    <a href="{{ url_for('financeiro.formas_pagamento') }}" class="nav-link {% if request.endpoint == 'financeiro.formas_pagamento' %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-credit-card-2-front"></i> Formas de Pagamento
+    </a>
+    {% endif %}
+
+    {% if pode('usuarios') %}
+    <div class="nav-label">Administração</div>
+    <a href="{{ url_for('usuarios.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('usuarios.') %}active{% endif %}" onclick="fecharSidebar()">
+      <i class="bi bi-person-lock"></i> Usuários e Permissões
+    </a>
+    {% endif %}
+  </div>
+
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="topbar">
+    <!-- Hamburguer (só mobile) -->
+    <button id="btn-toggle-sidebar" onclick="abrirSidebar()" aria-label="Menu">
+      <i class="bi bi-list"></i>
+    </button>
+    <h5 class="flex-fill">{% block page_title %}{% endblock %}</h5>
+    <span class="text-muted small d-none d-sm-inline">{{ now().strftime('%d/%m/%Y') if now else '' }}</span>
+  </div>
+
+  <div class="content-area">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  window.TAXAS_DB = {{ taxas_db|tojson }};
+  window.FORMAS_TAXA = {{ formas_taxa|tojson }};
+  window.OPERADORAS_NOMES = {{ operadoras_nomes|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/taxas.js') }}"></script>
+<script>
+function abrirSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function fecharSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+  document.body.style.overflow = '';
+}
+// Fecha ao pressionar Esc
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharSidebar(); });
+
+function confirmar(msg, formId) {
+  if (confirm(msg || 'Confirmar esta ação?')) {
+    document.getElementById(formId).submit();
+  }
+}
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Alterar senha — {{ marca.nome }}{% endblock %}
+{% block page_title %}Alterar senha{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6 col-lg-4">
+    <div class="card">
+      <div class="card-body">
+        <form method="post" autocomplete="off">
+          <div class="mb-3">
+            <label class="form-label">Senha atual</label>
+            <input type="password" name="senha_atual" class="form-control" required autocomplete="current-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Nova senha</label>
+            <input type="password" name="nova_senha" class="form-control" minlength="8" required autocomplete="new-password">
+            <div class="form-text">Mínimo de 8 caracteres.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Confirmar nova senha</label>
+            <input type="password" name="confirma_senha" class="form-control" minlength="8" required autocomplete="new-password">
+          </div>
+          <button class="btn btn-primary w-100"><i class="bi bi-key me-1"></i>Salvar nova senha</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

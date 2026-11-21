@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar Lançamento' if lancamento else 'Novo Lançamento' %}
+{% block title %}{{ titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% set fd = form_data %}
+{% set l = lancamento %}
+
+<div class="card" style="max-width:750px">
+  <div class="card-body">
+
+    {% if liquidado %}
+    <div class="alert alert-warning d-flex align-items-center mb-3 py-2" role="alert">
+      <i class="bi bi-lock-fill me-2 fs-5"></i>
+      <div>
+        <strong>Lançamento liquidado.</strong>
+        Apenas <strong>Descrição</strong>, <strong>Observações</strong> e <strong>Centro de Custo</strong>
+        podem ser alterados. Os demais campos são somente leitura.
+      </div>
+    </div>
+    {% if l.tipo == 'despesa' and l.status == 'pago' and not l.bloqueado and '[taxa_de:' not in (l.observacoes or '') %}
+    <form method="post" action="{{ url_for('financeiro.desfazer_pagamento', id=l.id) }}" id="form-desfazer" class="mb-3">
+      <button type="button" class="btn btn-outline-danger btn-sm"
+        onclick="confirmar('Desfazer o pagamento? A despesa volta para Contas a Pagar como pendente e sai do caixa.','form-desfazer')">
+        <i class="bi bi-arrow-counterclockwise me-1"></i>Desfazer pagamento (voltar para pendente)
+      </button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    <form method="post">
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label">Descrição *</label>
+          <input type="text" name="descricao" class="form-control" required
+            value="{{ fd.get('descricao') or (l.descricao if l) or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Tipo *</label>
+          <select name="tipo" class="form-select" required {% if liquidado %}disabled{% endif %}>
+            <option value="receita" {% if (fd.get('tipo') or (l.tipo if l) or '') == 'receita' %}selected{% endif %}>Receita</option>
+            <option value="despesa" {% if (fd.get('tipo') or (l.tipo if l) or '') == 'despesa' %}selected{% endif %}>Despesa</option>
+          </select>
+          {% if liquidado %}<input type="hidden" name="tipo" value="{{ l.tipo }}">{% endif %}
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Valor (R$) *</label>
+          <input type="number" step="0.01" min="0.01" name="valor" class="form-control" required
+            value="{{ fd.get('valor') or (l.valor if l) or '' }}"
+            {% if liquidado %}readonly{% endif %}>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Data de Competência *</label>
+          <input type="date" name="data_competencia" class="form-control" required
+            value="{{ fd.get('data_competencia') or (l.data_competencia.strftime('%Y-%m-%d') if l and l.data_competencia) or '' }}"
+            {% if liquidado %}readonly{% endif %}>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Data de Vencimento</label>
+          <input type="date" name="data_vencimento" class="form-control"
+            value="{{ fd.get('data_vencimento') or (l.data_vencimento.strftime('%Y-%m-%d') if l and l.data_vencimento) or '' }}"
+            {% if liquidado %}readonly{% endif %}>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Data de Pagamento</label>
+          <input type="date" name="data_pagamento" class="form-control"
+            value="{{ fd.get('data_pagamento') or (l.data_pagamento.strftime('%Y-%m-%d') if l and l.data_pagamento) or '' }}"
+            {% if liquidado %}readonly{% endif %}>
+          {% if not liquidado %}<small class="text-muted">Preencher ao confirmar o pagamento</small>{% endif %}
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Status</label>
+          <select name="status" class="form-select" {% if liquidado %}disabled{% endif %}>
+            <option value="pendente" {% if (fd.get('status') or (l.status if l) or 'pendente') == 'pendente' %}selected{% endif %}>Pendente</option>
+            <option value="recebido" {% if (fd.get('status') or (l.status if l) or '') == 'recebido' %}selected{% endif %}>Recebido</option>
+            <option value="pago" {% if (fd.get('status') or (l.status if l) or '') == 'pago' %}selected{% endif %}>Pago</option>
+          </select>
+          {% if liquidado %}<input type="hidden" name="status" value="{{ l.status }}">{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">
+            Centro de Custo
+            {% if not liquidado %}<span class="text-danger" title="Classificação obrigatória para relatórios">*</span>{% endif %}
+          </label>
+          <select name="centro_custo_id" class="form-select">
+            <option value="">— Selecione —</option>
+            {% for cc in centros %}
+            <option value="{{ cc.id }}"
+              {% if (fd.get('centro_custo_id')|int if fd.get('centro_custo_id') else (l.centro_custo_id if l)) == cc.id %}selected{% endif %}>
+              {{ cc.nome }}
+            </option>
+            {% endfor %}
+          </select>
+          {% if not liquidado %}
+          <small class="text-muted">Necessário para DRE e relatório gerencial.</small>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Cliente (opcional)</label>
+          <select name="cliente_id" class="form-select" {% if liquidado %}disabled{% endif %}>
+            <option value="">— Nenhum —</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}"
+              {% if (fd.get('cliente_id')|int if fd.get('cliente_id') else (l.cliente_id if l)) == c.id %}selected{% endif %}>
+              {{ rotulo(c) }}
+            </option>
+            {% endfor %}
+          </select>
+          {% if liquidado %}<input type="hidden" name="cliente_id" value="{{ l.cliente_id or '' }}">{% endif %}
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Forma de Pagamento</label>
+          <select name="forma_pagamento" class="form-select" {% if liquidado %}disabled{% endif %}>
+            <option value="">— Selecione —</option>
+            {% for v, lab in formas %}
+            <option value="{{ v }}" {% if (fd.get('forma_pagamento') or (l.forma_pagamento if l) or '') == v %}selected{% endif %}>{{ lab }}</option>
+            {% endfor %}
+          </select>
+          {% if liquidado %}<input type="hidden" name="forma_pagamento" value="{{ l.forma_pagamento or '' }}">{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Número do Documento</label>
+          <input type="text" name="numero_documento" class="form-control"
+            value="{{ fd.get('numero_documento') or (l.numero_documento if l) or '' }}"
+            {% if liquidado %}readonly{% endif %}>
+        </div>
+        {% if liquidado and l and l.updated_at %}
+        <div class="col-md-4 d-flex align-items-end">
+          <small class="text-muted">
+            <i class="bi bi-clock-history me-1"></i>
+            Última edição: {{ l.updated_at.strftime('%d/%m/%Y %H:%M') }}
+          </small>
+        </div>
+        {% endif %}
+        <div class="col-12" id="bloco-recorrencia" style="display:none">
+          {% if l and l.recorrencia_origem_id %}
+          <div class="alert alert-info py-2 mb-0 small">
+            <i class="bi bi-arrow-repeat me-1"></i>Esta despesa foi gerada automaticamente por uma despesa recorrente.
+            Para mudar o valor dos próximos meses ou parar a recorrência, edite a
+            <a href="{{ url_for('financeiro.editar_lancamento', id=l.recorrencia_origem_id) }}">despesa original</a>.
+          </div>
+          {% else %}
+          <div class="border rounded p-3 bg-light">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="recorrente" value="1" id="recorrente"
+                {% if (l and l.recorrente) %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="recorrente">
+                <i class="bi bi-arrow-repeat me-1"></i>Despesa recorrente (repete todo mês)
+              </label>
+            </div>
+            <div id="dia-recorrencia" style="display:none">
+              <div class="row g-2 align-items-center mt-1">
+                <div class="col-auto"><label class="form-label mb-0" for="dia_recorrencia">Dia do mês em que a despesa acontece</label></div>
+                <div class="col-auto">
+                  <input type="number" min="1" max="31" name="dia_recorrencia" id="dia_recorrencia" class="form-control form-control-sm"
+                    style="width:80px" value="{{ (l.dia_recorrencia if l and l.dia_recorrencia) or '' }}">
+                </div>
+                <div class="col-auto">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="ultimo-dia" {% if l and l.dia_recorrencia == 31 %}checked{% endif %}>
+                    <label class="form-check-label" for="ultimo-dia">Último dia do mês</label>
+                  </div>
+                </div>
+              </div>
+              <div class="row g-2 align-items-center mt-1">
+                <div class="col-auto"><label class="form-label mb-0" for="percentual_lucro">Valor = % do lucro bruto do mês</label></div>
+                <div class="col-auto">
+                  <div class="input-group input-group-sm" style="width:120px">
+                    <input type="number" step="0.01" min="0" max="100" name="percentual_lucro" id="percentual_lucro" class="form-control"
+                      value="{{ (l.percentual_lucro if l and l.percentual_lucro) or '' }}" placeholder="ex.: 10">
+                    <span class="input-group-text">%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-1"><small class="text-muted">
+                Todo mês o sistema lança esta despesa como <strong>Pendente</strong>, com o mesmo centro de custo, vencendo nesse dia
+                (em meses curtos, no último dia). Para parar, desmarque aqui. Sem dia, usa o da data de competência.
+                <strong>Com %:</strong> o valor de cada mês é esse percentual do lucro bruto do mês (contratos dos partos do mês, já recebidos
+                e a receber, como no relatório de faturamento com "incluir contratos a receber") e é recalculado enquanto estiver pendente;
+                depois de paga, fica com o valor pago.
+                Deixe o % em branco para usar o valor fixo informado acima.</small></div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label">Observações</label>
+          <textarea name="observacoes" class="form-control" rows="2">{{ fd.get('observacoes') or (l.observacoes if l) or '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        <a href="{{ url_for('financeiro.lancamentos') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  var tipo = document.querySelector('select[name="tipo"]'),
+      bloco = document.getElementById('bloco-recorrencia'),
+      chk = document.getElementById('recorrente'),
+      dia = document.getElementById('dia-recorrencia'),
+      comp = document.querySelector('input[name="data_competencia"]');
+  function atualiza() {
+    bloco.style.display = tipo.value === 'despesa' ? '' : 'none';
+    if (dia) dia.style.display = chk && chk.checked ? '' : 'none';
+  }
+  var valor = document.querySelector('input[name="valor"]'),
+      pct = document.getElementById('percentual_lucro'),
+      ultimo = document.getElementById('ultimo-dia');
+  function valorObrigatorio() {   // com % do lucro o valor é calculado pelo sistema
+    if (valor && !valor.readOnly) valor.required = !(chk && chk.checked && pct && pct.value);
+  }
+  tipo.addEventListener('change', atualiza);
+  if (chk) chk.addEventListener('change', function () {
+    var campo = document.getElementById('dia_recorrencia');
+    if (chk.checked && campo && !campo.value && comp.value) campo.value = parseInt(comp.value.slice(8, 10), 10);
+    atualiza(); valorObrigatorio();
+  });
+  if (ultimo) ultimo.addEventListener('change', function () {
+    var campo = document.getElementById('dia_recorrencia');
+    if (ultimo.checked) campo.value = 31;
+    else if (comp.value) campo.value = parseInt(comp.value.slice(8, 10), 10);
+  });
+  var diaCampo = document.getElementById('dia_recorrencia');
+  if (diaCampo) diaCampo.addEventListener('input', function () { if (ultimo) ultimo.checked = diaCampo.value === '31'; });
+  if (pct) pct.addEventListener('input', valorObrigatorio);
+  valorObrigatorio();
+  atualiza();
+})();
+</script>
+{% endblock %}

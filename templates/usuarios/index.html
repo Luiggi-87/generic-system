@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Usuários e Permissões — {{ marca.nome }}{% endblock %}
+{% block page_title %}Usuários e Permissões{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="text-muted small">Quem tem acesso ao sistema e o que cada pessoa pode ver. Administradoras acessam tudo.</div>
+  <a href="{{ url_for('usuarios.novo') }}" class="btn btn-primary btn-sm"><i class="bi bi-person-plus me-1"></i>Novo acesso</a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Prestadora de serviço</th><th>Pode acessar</th><th>Situação</th><th></th></tr></thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr {% if not u.ativo %}style="opacity:.6"{% endif %}>
+          <td class="fw-semibold">{{ u.nome }}</td>
+          <td class="small">{{ u.email }}</td>
+          <td>{% if u.eh_admin %}<span class="badge bg-dark">Administradora</span>{% elif u.perfil == 'contabilidade' %}<span class="badge" style="background:#6a1b9a">Contabilidade</span>{% else %}<span class="badge bg-info text-dark">Prestadora de serviço</span>{% endif %}</td>
+          <td class="small">{{ u.funcionario.nome if u.funcionario else '—' }}</td>
+          <td class="small">
+            {% if u.eh_admin %}<span class="text-muted">tudo, inclusive usuários</span>
+            {% elif u.areas %}{% for k in areas %}{% if k in u.areas %}<span class="badge bg-light text-dark border me-1 mb-1">{{ areas[k] }}</span>{% endif %}{% endfor %}
+            {% else %}<span class="text-danger">nenhuma área liberada</span>{% endif %}
+          </td>
+          <td>{% if u.ativo %}<span class="badge bg-success">Ativo</span>{% else %}<span class="badge bg-secondary">Bloqueado</span>{% endif %}</td>
+          <td class="text-end text-nowrap">
+            <a href="{{ url_for('usuarios.editar', id=u.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i> Editar</a>
+            {% if u.id != current_user.id %}
+            <form method="post" action="{{ url_for('usuarios.alternar_ativo', id=u.id) }}" id="ativo-{{ u.id }}" class="d-inline">
+              <button type="button" class="btn btn-sm {{ 'btn-outline-danger' if u.ativo else 'btn-outline-success' }}"
+                      onclick="confirmar('{{ 'Bloquear' if u.ativo else 'Liberar' }} o acesso de {{ u.nome|e }}?', 'ativo-{{ u.id }}')">
+                <i class="bi bi-{{ 'lock' if u.ativo else 'unlock' }}"></i> {{ 'Bloquear' if u.ativo else 'Liberar' }}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

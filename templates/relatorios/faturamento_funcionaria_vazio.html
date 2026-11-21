@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demonstrativo de Repasse — {{ d.mes_nome }}/{{ d.ano }}</title>
+  {% include 'relatorios/_faturamento_css.html' %}
+</head>
+<body>
+<div class="toolbar no-print">
+  <div class="voltar-linha"><a class="btn voltar" href="{{ url_for('dashboard') }}">← Voltar ao sistema</a></div>
+  {% include 'relatorios/_faturamento_periodo.html' %}
+</div>
+<div class="page">
+  <div class="header">
+    <div>
+      <div class="brand">{{ marca.nome }}</div>
+      <div class="sub">{{ marca.slogan }}</div>
+    </div>
+    <div>
+      <div class="titulo">Demonstrativo de Repasse</div>
+      <div class="meta">{{ d.mes_nome }}/{{ d.ano }}</div>
+    </div>
+  </div>
+  <div class="section">
+    {% if aguardando %}
+    <p class="muted" style="font-size:10pt">O demonstrativo de {{ d.mes_nome }}/{{ d.ano }} fica disponível quando a Folha do mês for fechada.
+      Até lá os valores podem mudar. Escolha outro mês acima, se quiser.</p>
+    {% else %}
+    <p class="muted" style="font-size:10pt">Não há repasse seu em {{ d.mes_nome }}/{{ d.ano }} (você não está na escala deste mês).
+      Escolha outro mês acima.</p>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Folha {{ periodo.titulo }} — {{ marca.nome }}</title>
+  {% include '_marca_css.html' %}
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      color: #222;
+      background: #fff;
+    }
+
+    /* ── Botão de impressão (some ao imprimir) ── */
+    .no-print {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      gap: 8px;
+      z-index: 100;
+    }
+    .btn-print {
+      background: var(--cm-primary-dark);
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 10pt;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-close-tab {
+      background: #eee;
+      color: #444;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 10pt;
+      cursor: pointer;
+    }
+
+    /* ── Página ── */
+    .page {
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 12mm 14mm;
+    }
+
+    /* ── Cabeçalho ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 3px solid var(--cm-primary-dark);
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+    }
+    .header-brand {
+      color: var(--cm-primary-dark);
+      font-size: 18pt;
+      font-weight: bold;
+      letter-spacing: -0.5px;
+    }
+    .header-sub {
+      color: #888;
+      font-size: 8pt;
+      margin-top: 2px;
+    }
+    .header-right {
+      text-align: right;
+    }
+    .header-periodo {
+      font-size: 14pt;
+      font-weight: bold;
+      color: #4a148c;
+    }
+    .header-meta {
+      font-size: 8pt;
+      color: #888;
+      margin-top: 3px;
+    }
+
+    /* ── KPIs ── */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .kpi {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .kpi-label {
+      font-size: 7pt;
+      color: #888;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .kpi-value {
+      font-size: 13pt;
+      font-weight: bold;
+      margin-top: 2px;
+    }
+    .kpi-sub { font-size: 7.5pt; color: #888; margin-top: 1px; }
+    .kpi-green  { border-left: 4px solid #2e7d32; }
+    .kpi-orange { border-left: 4px solid #e65100; }
+    .kpi-purple { border-left: 4px solid #4527a0; }
+    .kpi-blue   { border-left: 4px solid #1565c0; }
+    .c-green  { color: #2e7d32; }
+    .c-orange { color: #e65100; }
+    .c-purple { color: #4527a0; }
+    .c-blue   { color: #1565c0; }
+
+    /* ── Seções ── */
+    .section { margin-bottom: 18px; }
+    .section-title {
+      font-size: 10pt;
+      font-weight: bold;
+      color: var(--cm-primary-dark);
+      border-bottom: 1px solid var(--cm-accent);
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .section-title span { font-size: 8pt; color: #888; font-weight: normal; }
+
+    /* ── Tabelas ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.5pt;
+    }
+    th {
+      background: var(--cm-bg);
+      color: #444;
+      font-weight: bold;
+      padding: 5px 7px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    td {
+      padding: 5px 7px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    tr:last-child td { border-bottom: none; }
+    .tfoot td {
+      border-top: 2px solid #ccc;
+      font-weight: bold;
+      background: #fafafa;
+    }
+    .text-right  { text-align: right; }
+    .text-center { text-align: center; }
+    .text-muted  { color: #888; }
+    .fw-bold     { font-weight: bold; }
+
+    /* Cores das colunas de horas */
+    .h-d  { color: #1b5e20; }
+    .h-n  { color: #1565c0; }
+    .h-ed { color: #e65100; }
+    .h-en { color: #4527a0; }
+
+    /* ── Info de taxas ── */
+    .taxa-box {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      background: #f9f5fb;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 16px;
+      font-size: 8pt;
+    }
+    .taxa-item { }
+    .taxa-item .taxa-label { color: #888; }
+    .taxa-item .taxa-val   { font-weight: bold; margin-top: 1px; }
+
+    /* ── Rodapé de pagamento ── */
+    .pagamento-box {
+      background: #e8f5e9;
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      font-size: 9pt;
+    }
+    .pagamento-box .pg-label { color: #2e7d32; font-weight: bold; font-size: 8pt; text-transform: uppercase; }
+    .pagamento-box .pg-value { font-size: 11pt; font-weight: bold; color: #1b5e20; }
+
+    /* ── Assinaturas ── */
+    .assinaturas {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 28px;
+    }
+    .assinatura-line {
+      border-top: 1px solid #888;
+      padding-top: 4px;
+      font-size: 8pt;
+      color: #444;
+      text-align: center;
+    }
+
+    /* ── Footer da página ── */
+    .page-footer {
+      margin-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      padding-top: 6px;
+      font-size: 7.5pt;
+      color: #aaa;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Impressão ── */
+    @media print {
+      .no-print { display: none !important; }
+      body { font-size: 9.5pt; }
+      .page { padding: 8mm 10mm; }
+      @page { size: A4; margin: 10mm; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Botões (somem ao imprimir) -->
+<div class="no-print">
+  <button class="btn-print" onclick="window.print()">
+    🖨 Imprimir / Salvar PDF
+  </button>
+  <button class="btn-close-tab" onclick="window.close()">Fechar</button>
+</div>
+
+<div class="page">
+
+  <!-- ── Cabeçalho ── -->
+  <div class="header">
+    <div>
+      <div class="header-brand">{{ marca.nome }}</div>
+      <div class="header-sub">{{ marca.slogan }}</div>
+    </div>
+    <div class="header-right">
+      <div class="header-periodo">Folha de Pagamento — {{ periodo.titulo }}</div>
+      <div class="header-meta">
+        Gerado em {{ gerado_em.strftime('%d/%m/%Y') }}
+        &nbsp;·&nbsp;
+        Status:
+        <strong style="color:{% if periodo.status == 'fechado' %}#2e7d32{% else %}#e65100{% endif %}">
+          {{ 'Fechada' if periodo.status == 'fechado' else 'Em aberto' }}
+        </strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPIs ── -->
+  <div class="kpis">
+    <div class="kpi kpi-green">
+      <div class="kpi-label">Receitas do Período</div>
+      <div class="kpi-value c-green">{{ calc.total_receita|brl }}</div>
+      <div class="kpi-sub">{{ periodo.receitas|length }} entrada(s)</div>
+    </div>
+    <div class="kpi kpi-blue">
+      <div class="kpi-label">Horas Equivalentes</div>
+      <div class="kpi-value c-blue">{{ calc.horas_eq|round(1) }}h</div>
+      <div class="kpi-sub">
+        D:{{ calc.hd_total|int }}h
+        N:{{ calc.hn_total|int }}h
+        ED:{{ calc.hed_total|int }}h
+        EN:{{ calc.hen_total|int }}h
+      </div>
+    </div>
+    <div class="kpi kpi-orange">
+      <div class="kpi-label">Total Bruto Distribuído</div>
+      <div class="kpi-value c-orange">{{ calc.total_bruto|brl }}</div>
+      <div class="kpi-sub">{{ periodo.escalas|length }} prestadora de serviço(s)</div>
+    </div>
+    <div class="kpi kpi-purple">
+      <div class="kpi-label">Total Líquido (Repasse)</div>
+      <div class="kpi-value c-purple">{{ calc.total_liquido|brl }}</div>
+      <div class="kpi-sub">Desconto: {{ calc.total_desconto_val|brl }}</div>
+    </div>
+  </div>
+
+  <!-- ── Taxas ── -->
+  <div class="taxa-box">
+    <div class="taxa-item">
+      <div class="taxa-label h-d">⬡ Taxa Diurna</div>
+      <div class="taxa-val">{{ calc.taxa_diurna|brl }}/h</div>
+    </div>
+    <div class="taxa-item">
+      <div class="taxa-label h-n">☾ Taxa Noturna (×1,25)</div>
+      <div class="taxa-val">{{ calc.taxa_noturna|brl }}/h</div>
+    </div>
+    <div class="taxa-item">
+      <div class="taxa-label">Total de Dias no Mês</div>
+      <div class="taxa-val">{{ periodo.total_dias }} dias</div>
+    </div>
+    <div class="taxa-item">
+      <div class="taxa-label">Período de Referência</div>
+      <div class="taxa-val">{{ periodo.titulo }}</div>
+    </div>
+  </div>
+
+  <!-- ── Receitas do Período ── -->
+  <div class="section">
+    <div class="section-title">
+      Receitas do Período
+      <span>Base de distribuição entre as prestadoras de serviço</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Cliente</th>
+          <th class="text-right">Parto</th>
+          <th class="text-right">Amamentação</th>
+          <th class="text-right">Laser</th>
+          <th class="text-right">Curso</th>
+          <th class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in receitas_sorted %}
+        <tr>
+          <td class="text-muted">{{ r.data.strftime('%d/%m/%Y') if r.data else '—' }}</td>
+          <td>{{ r.cliente_nome or '—' }}</td>
+          <td class="text-right">{% if r.parto %}{{ r.parto|brl }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-right">{% if r.amamentacao %}{{ r.amamentacao|brl }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-right">{% if r.laser %}{{ r.laser|brl }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-right">{% if r.curso %}{{ r.curso|brl }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-right fw-bold">{{ r.total|brl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="tfoot">
+          <td colspan="2" class="text-right text-muted">TOTAL</td>
+          <td class="text-right">{{ receitas_sorted|sum(attribute='parto')|brl }}</td>
+          <td class="text-right">{{ receitas_sorted|sum(attribute='amamentacao')|brl }}</td>
+          <td class="text-right">{{ receitas_sorted|sum(attribute='laser')|brl }}</td>
+          <td class="text-right">{{ receitas_sorted|sum(attribute='curso')|brl }}</td>
+          <td class="text-right c-green">{{ calc.total_receita|brl }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── Repasse por Prestadora de serviço ── -->
+  <div class="section">
+    <div class="section-title">
+      Repasse por Prestadora de serviço
+      <span>Calculado com base nas horas trabalhadas</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Prestadora de serviço</th>
+          <th class="text-center h-d">H.D</th>
+          <th class="text-right h-d">Vl.D</th>
+          <th class="text-center h-n">H.N</th>
+          <th class="text-right h-n">Vl.N</th>
+          <th class="text-center h-ed">H.ED</th>
+          <th class="text-right h-ed">Vl.ED</th>
+          <th class="text-center h-en">H.EN</th>
+          <th class="text-right h-en">Vl.EN</th>
+          <th class="text-right">Bruto</th>
+          <th class="text-center">Desc.</th>
+          <th class="text-right c-purple">Líquido</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in calc.resultados %}
+        <tr>
+          <td class="fw-bold">{{ r.funcionario.nome }}</td>
+          <td class="text-center h-d">{{ r.escala.horas_diurnas|int }}</td>
+          <td class="text-right text-muted">{{ r.v_diurnas|brl }}</td>
+          <td class="text-center h-n">{{ r.escala.horas_noturnas|int }}</td>
+          <td class="text-right text-muted">{{ r.v_noturnas|brl }}</td>
+          <td class="text-center h-ed">{{ r.escala.horas_extra|int }}</td>
+          <td class="text-right text-muted">{{ r.v_extra_d|brl }}</td>
+          <td class="text-center h-en">{{ (r.escala.horas_extra_noturnas or 0)|int }}</td>
+          <td class="text-right text-muted">{{ r.v_extra_n|brl }}</td>
+          <td class="text-right fw-bold">{{ r.bruto|brl }}</td>
+          <td class="text-center text-muted">{{ (r.desc_pct * 100)|round(0)|int }}%</td>
+          <td class="text-right fw-bold c-purple">{{ r.liquido|brl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="tfoot">
+          <td colspan="9" class="text-right text-muted">TOTAL</td>
+          <td class="text-right c-orange">{{ calc.total_bruto|brl }}</td>
+          <td class="text-right text-muted">{{ calc.total_desconto_val|brl }}</td>
+          <td class="text-right c-purple">{{ calc.total_liquido|brl }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── Info de Pagamento ── -->
+  {% if pagamento_ref %}
+  <div class="pagamento-box">
+    <div>
+      <div class="pg-label">✓ Pagamentos Registrados no Caixa</div>
+      <div style="font-size:8pt;color:#555;margin-top:3px">
+        Lançamentos criados em <strong>Financeiro → Contas a Pagar</strong> com centro de custo Recursos Humanos
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="pg-label">Data do Pagamento</div>
+      <div class="pg-value">{{ pagamento_ref.data_pagamento.strftime('%d/%m/%Y') if pagamento_ref.data_pagamento else '—' }}</div>
+      <div style="font-size:8pt;color:#555">
+        {{ pagamento_ref.forma_pagamento|upper if pagamento_ref.forma_pagamento else '' }}
+        · Total: {{ calc.total_liquido|brl }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Assinaturas ── -->
+  <div class="assinaturas">
+    {% for r in calc.resultados %}
+    <div class="assinatura-line">
+      {{ r.funcionario.nome }}<br>
+      <span class="text-muted">Líquido: {{ r.liquido|brl }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ── Rodapé ── -->
+  <div class="page-footer">
+    <span>{{ marca.nome }} — Folha de Pagamento {{ periodo.titulo }}</span>
+    <span>Gerado em {{ gerado_em.strftime('%d/%m/%Y') }}</span>
+  </div>
+
+</div><!-- /page -->
+
+<script>
+  // Abre o diálogo de impressão automaticamente ao carregar
+  window.addEventListener('load', function() {
+    // Pequeno delay para garantir que a página renderizou
+    setTimeout(() => {
+      // Não abre automaticamente — usuário clica no botão
+    }, 300);
+  });
+</script>
+
+</body>
+</html>

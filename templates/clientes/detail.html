@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+{% block title %}{{ cliente.nome }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}Ficha da Cliente{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h4 class="mb-0">{{ rotulo(cliente) }}</h4>
+    <small class="text-muted">
+      {% if cliente.status == 'ativa' %}<span class="badge bg-success">Gestante</span>
+      {% elif cliente.status == 'pos_parto' %}<span class="badge bg-info">Puérpera</span>
+      {% else %}<span class="badge bg-secondary">Inativa</span>{% endif %}
+      {% if cliente.cpf %} • CPF: {{ cliente.cpf }}{% endif %}
+    </small>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('atendimentos.novo') }}?cliente_id={{ cliente.id }}" class="btn btn-success btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Novo Atendimento
+    </a>
+    <a href="{{ url_for('clientes.editar', id=cliente.id) }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Editar
+    </a>
+    <a href="{{ url_for('clientes.index') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+    <button type="button" class="btn btn-outline-danger btn-sm ms-2"
+            data-bs-toggle="modal" data-bs-target="#modalExcluirCliente">
+      <i class="bi bi-trash me-1"></i>Excluir Cliente
+    </button>
+  </div>
+</div>
+
+<!-- Modal confirmação exclusão -->
+<div class="modal fade" id="modalExcluirCliente" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h6 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Excluir Cliente</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Tem certeza que deseja excluir <strong>{{ cliente.nome }}</strong>?</p>
+        <p class="text-danger mb-0"><strong>Isso irá apagar permanentemente:</strong></p>
+        <ul class="text-danger small mt-1">
+          <li>Todos os atendimentos</li>
+          <li>Todos os lançamentos financeiros</li>
+          <li>Todas as notas fiscais</li>
+        </ul>
+        <p class="text-muted small">Esta ação não pode ser desfeita.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" action="{{ url_for('clientes.excluir', id=cliente.id) }}">
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="bi bi-trash me-1"></i>Sim, excluir tudo
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Dados cadastrais -->
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header">Dados Pessoais</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:.88rem">
+          <dt class="col-5 text-muted">Nascimento</dt>
+          <dd class="col-7">{{ cliente.data_nascimento|data_br }}</dd>
+          <dt class="col-5 text-muted">Telefone</dt>
+          <dd class="col-7">{{ cliente.telefone or '—' }}</dd>
+          <dt class="col-5 text-muted">E-mail</dt>
+          <dd class="col-7" style="word-break:break-all">{{ cliente.email or '—' }}</dd>
+          <dt class="col-5 text-muted">Endereço</dt>
+          <dd class="col-7">{{ cliente.endereco or '—' }}{% if cliente.cidade %}, {{ cliente.cidade }}{% endif %}{% if cliente.estado %}/{{ cliente.estado }}{% endif %}</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header">Acompanhamento Obstétrico</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:.88rem">
+          <dt class="col-6 text-muted">Início</dt>
+          <dd class="col-6">{{ cliente.data_inicio_acompanhamento|data_br }}</dd>
+          <dt class="col-6 text-muted">Semanas</dt>
+          <dd class="col-6">
+            {% if cliente.semanas_gestacao is not none %}
+              {% set sem = cliente.semanas_gestacao %}
+              <span class="badge fw-bold"
+                style="background:{% if sem >= 38 %}#ffcdd2;color:#b71c1c{% elif sem >= 35 %}#fff9c4;color:#f57f17{% else %}var(--cm-accent);color:var(--cm-primary-dark){% endif %};font-size:.9rem">
+                {{ sem }}ª semana
+              </span>
+              {% if sem >= 38 %}<i class="bi bi-exclamation-circle-fill text-danger ms-1" title="Parto iminente!"></i>{% endif %}
+            {% else %}—{% endif %}
+          </dd>
+          <dt class="col-6 text-muted">DPP</dt>
+          <dd class="col-6">{{ cliente.data_prevista_parto|data_br }}</dd>
+          <dt class="col-6 text-muted">Data do Parto</dt>
+          <dd class="col-6">
+            {% if cliente.data_parto %}
+              <strong class="text-success">{{ cliente.data_parto|data_br }}</strong>
+            {% else %}—{% endif %}
+          </dd>
+          <dt class="col-6 text-muted">Tipo de Parto</dt>
+          <dd class="col-6">
+            {% if cliente.tipo_parto == 'parto_normal' %}
+              <span class="badge" style="background:#d0f0c0;color:#1b5e20">Parto Normal</span>
+            {% elif cliente.tipo_parto == 'parto_cesario' %}
+              <span class="badge" style="background:#ffe0b2;color:#bf360c">Cesariana</span>
+            {% else %}—{% endif %}
+          </dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Plano contratado -->
+    {% if cliente.plano %}
+    <div class="card mb-3" style="border-left:3px solid var(--cm-primary)">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-file-earmark-medical me-1" style="color:var(--cm-primary)"></i>Plano Contratado</span>
+        <span class="fw-bold text-success">{{ cliente.plano.valor|brl }}</span>
+      </div>
+      <div class="card-body pb-2">
+        <div class="fw-bold mb-2" style="font-size:.9rem">{{ cliente.plano.nome }}</div>
+        {% if cliente.plano.itens %}
+        <ul class="list-unstyled mb-0" style="font-size:.84rem">
+          {% for item in cliente.plano.itens %}
+          <li class="mb-1">
+            <i class="bi bi-check-circle-fill me-1" style="color:#1b5e20;font-size:.75rem"></i>
+            {% if item.quantidade > 1 %}<strong>{{ item.quantidade }}×</strong> {% endif %}
+            {{ item.servico }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Dados do contrato -->
+    {% if cliente.medico_grupo or cliente.grupo_parto or cliente.hospital_parto or cliente.nome_bebe or cliente.contrato_status %}
+    <div class="card mb-3">
+      <div class="card-header">Dados do Contrato</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:.88rem">
+          {% if cliente.ano_referencia %}
+          <dt class="col-6 text-muted">Ano</dt>
+          <dd class="col-6">{{ cliente.ano_referencia }}</dd>
+          {% endif %}
+          {% if cliente.contrato_status %}
+          <dt class="col-6 text-muted">Contrato</dt>
+          <dd class="col-6"><span class="badge {{ cliente.contrato_status|cor_contrato }}">{{ cliente.contrato_status }}</span></dd>
+          {% endif %}
+          {% if cliente.medico_grupo %}
+          <dt class="col-6 text-muted">Médico pré-natalista</dt>
+          <dd class="col-6">{{ cliente.medico_grupo }}</dd>
+          {% endif %}
+          {% if cliente.grupo_parto %}
+          <dt class="col-6 text-muted">Grupo de parto / Plantão</dt>
+          <dd class="col-6">{{ cliente.grupo_parto }}</dd>
+          {% endif %}
+          {% if cliente.hospital_parto %}
+          <dt class="col-6 text-muted">Hospital</dt>
+          <dd class="col-6">{{ cliente.hospital_parto }}</dd>
+          {% endif %}
+          {% if cliente.nome_bebe %}
+          <dt class="col-6 text-muted">Nome do Bebê</dt>
+          <dd class="col-6">{{ cliente.nome_bebe }}</dd>
+          {% endif %}
+        </dl>
+        {% if cliente.observacoes %}
+        <div class="border-top mt-2 pt-2">
+          <small class="text-muted fw-bold">Serviços contratados:</small>
+          <p class="mb-0 small">{{ cliente.observacoes }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Resumo financeiro -->
+    <div class="card">
+      <div class="card-header">Resumo Financeiro</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted small">Bruto Recebido</span>
+          <span class="text-positivo">{{ total_recebido|brl }}</span>
+        </div>
+        {% if total_taxas > 0 %}
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted small">Taxas Operadora</span>
+          <span class="text-negativo">− {{ total_taxas|brl }}</span>
+        </div>
+        <div class="d-flex justify-content-between mb-2 border-top pt-2">
+          <span class="text-muted small fw-bold">Líquido Real</span>
+          <span class="text-positivo fw-bold">{{ total_liquido|brl }}</span>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between mb-2">
+          <span class="text-muted small">Total Pendente</span>
+          <span class="text-negativo">{{ total_pendente|brl }}</span>
+        </div>
+        <hr>
+        <a href="{{ url_for('financeiro.novo_lancamento') }}?cliente_id={{ cliente.id }}" class="btn btn-sm btn-outline-primary w-100">
+          <i class="bi bi-plus me-1"></i>Novo Lançamento
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Atendimentos e lançamentos -->
+  <div class="col-lg-8">
+    <!-- Atendimentos -->
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-calendar-check me-1"></i>Atendimentos ({{ atendimentos|length }})</span>
+        <a href="{{ url_for('atendimentos.novo') }}?cliente_id={{ cliente.id }}" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plus-lg me-1"></i>Agendar
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if atendimentos %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Procedimentos</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for a in atendimentos %}
+              <tr>
+                <td>{{ a.data_atendimento|data_br }}<br>
+                  {% if a.hora_atendimento %}<small class="text-muted">{{ a.hora_atendimento }}</small>{% endif %}
+                </td>
+                <td><span class="text-capitalize">{{ a.tipo }}</span></td>
+                <td>
+                  {% for item in a.itens %}
+                    <small class="d-block">{{ item.procedimento.nome }}</small>
+                  {% else %}—
+                  {% endfor %}
+                </td>
+                <td>{{ a.valor_total|brl }}</td>
+                <td>
+                  {% if a.status == 'agendado' %}<span class="badge bg-warning text-dark">Agendado</span>
+                  {% elif a.status == 'realizado' %}<span class="badge bg-success">Realizado</span>
+                  {% else %}<span class="badge bg-secondary">Cancelado</span>{% endif %}
+                </td>
+                <td>
+                  <a href="{{ url_for('atendimentos.detail', id=a.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3">Nenhum atendimento registrado.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Lançamentos financeiros -->
+    <div class="card">
+      <div class="card-header"><i class="bi bi-journal-text me-1"></i>Lançamentos Financeiros ({{ lancamentos|length }})</div>
+      <div class="card-body p-0">
+        {% if lancamentos %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0" style="font-size:.87rem">
+            <thead>
+              <tr>
+                <th>Competência</th>
+                <th>Descrição</th>
+                <th class="text-end">Bruto</th>
+                <th class="text-center">Forma Pgto</th>
+                <th class="text-center">Taxa</th>
+                <th class="text-end">Líquido Real</th>
+                <th>Status</th>
+                <th>Pagamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in lancamentos %}
+              <tr>
+                <td class="text-muted small">{{ l.data_competencia|data_br }}</td>
+                <td>{{ l.descricao }}</td>
+                <td class="text-end {{ 'text-positivo' if l.tipo == 'receita' else 'text-negativo' }}">
+                  {{ l.valor|brl }}
+                </td>
+                <td class="text-center">
+                  {% if l.forma_pagamento %}
+                  <span class="badge bg-light text-dark" style="font-size:.75rem">
+                    {{ formas_nomes.get(l.forma_pagamento, l.forma_pagamento) }}
+                    {% if l.parcelas and l.parcelas > 1 %} {{ l.parcelas }}x{% endif %}
+                  </span>
+                  {% else %}
+                  <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if l.taxa_operadora_pct and l.taxa_operadora_pct > 0 %}
+                  <span class="text-negativo small">
+                    {{ l.taxa_operadora_pct|round(2) }}%<br>
+                    <small>− {{ l.taxa_operadora_valor|brl }}</small>
+                  </span>
+                  {% else %}
+                  <span class="text-muted small">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-end fw-bold">
+                  {% if l.valor_liquido is not none %}
+                  <span class="text-positivo">{{ l.valor_liquido|brl }}</span>
+                  {% else %}
+                  <span class="text-positivo">{{ l.valor|brl }}</span>
+                  {% endif %}
+                </td>
+                <td><span class="badge bg-{{ l.status_class }}">{{ l.status_label }}</span></td>
+                <td class="text-muted small">{{ l.data_pagamento|data_br }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3">Nenhum lançamento registrado.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

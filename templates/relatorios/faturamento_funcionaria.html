@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repasse — {{ f.nome }} — {{ d.mes_nome }}/{{ d.ano }}</title>
+  {% include 'relatorios/_faturamento_css.html' %}
+</head>
+<body>
+
+<div class="toolbar no-print">
+  {% if not so_propria %}
+  <div class="voltar-linha"><a class="btn voltar" href="{{ url_for('faturamento.index', mes=d.mes, ano=d.ano, despesa_pct=d.pct, criterio=d.criterio, a_receber=1 if d.a_receber else None, modelo='despesas' if d.modelo == 'despesas' else None) }}">← Voltar ao relatório</a></div>
+  {% else %}
+  <div class="voltar-linha"><a class="btn voltar" href="{{ url_for('dashboard') }}">← Voltar ao sistema</a></div>
+  {% endif %}
+  {% include 'relatorios/_faturamento_periodo.html' %}
+  <button type="button" class="btn" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+  <span class="muted">Para enviar: use "Salvar como PDF" na janela de impressão e anexe o arquivo.</span>
+</div>
+
+<div class="page">
+  <div class="header">
+    <div>
+      <div class="brand">{{ marca.nome }}</div>
+      <div class="sub">{{ marca.slogan }}</div>
+    </div>
+    <div>
+      <div class="titulo">Demonstrativo de Repasse</div>
+      <div class="meta">{{ d.mes_nome }}/{{ d.ano }}</div>
+    </div>
+  </div>
+
+  {% if d.folha_aberta %}<div class="aviso">PRÉVIA — a Folha deste mês ainda está aberta: os valores podem mudar até o fechamento.</div>{% endif %}
+
+  <div class="section">
+    <div class="section-title">Prestadora de serviço</div>
+    <div class="kv">
+      <div>Nome</div><div class="v">{{ f.nome }}</div>
+      {% if f.cargo %}<div>Cargo</div><div class="v">{{ f.cargo }}</div>{% endif %}
+      <div>Período</div><div class="v">{{ d.inicio.strftime('%d/%m/%Y') }} a {{ d.fim.strftime('%d/%m/%Y') }}</div>
+    </div>
+  </div>
+
+  {% if d.modelo == 'folha' %}
+  <div class="section">
+    <div class="section-title">Base de cálculo do mês</div>
+    <div class="kv">
+      <div>Lucro bruto mensal para fins de cálculo</div><div class="v">{{ d.lucro_liquido|brl }}</div>
+      <div>Valor da hora diurna</div><div class="v">{{ d.taxa_dia|brl }}</div>
+      <div>Valor da hora noturna (acréscimo de 25%)</div><div class="v">{{ d.taxa_noite|brl }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Seu repasse</div>
+    <table>
+      <thead><tr><th>Descrição</th><th class="r">Horas</th><th class="r">Valor da hora</th><th class="r">Valor</th></tr></thead>
+      <tbody>
+        <tr><td>Horas diurnas trabalhadas</td><td class="r">{{ f.horas_diurnas|round(1) }}</td>
+            <td class="r">{{ d.taxa_dia|brl }}</td><td class="r">{{ f.valor_diurnas|brl }}</td></tr>
+        <tr><td>Horas noturnas trabalhadas</td><td class="r">{{ f.horas_noturnas|round(1) }}</td>
+            <td class="r">{{ d.taxa_noite|brl }}</td><td class="r">{{ f.valor_noturnas|brl }}</td></tr>
+        {% if f.horas_extra_d or f.horas_extra_n %}
+        <tr><td>Horas extras ({{ f.horas_extra_d|round(1) }} diurnas, {{ f.horas_extra_n|round(1) }} noturnas)</td>
+            <td class="r">{{ (f.horas_extra_d + f.horas_extra_n)|round(1) }}</td><td class="r">—</td><td class="r">{{ f.valor_extras|brl }}</td></tr>
+        {% endif %}
+        <tr><td colspan="3">Valor bruto</td><td class="r fw">{{ f.bruto|brl }}</td></tr>
+        {% if d.rateio_custos is not none %}
+        <tr><td colspan="3">Despesas mensais</td><td class="r">− {{ f.desc_val|brl }}</td></tr>
+        {% for nome, valor in despesas %}
+        <tr class="muted"><td colspan="3" style="padding-left:18px">{{ nome }}</td><td class="r">{{ valor|brl }}</td></tr>
+        {% endfor %}
+        {% else %}
+        <tr><td colspan="3">Desconto ({{ (f.desc_pct * 100)|round(1) }}%)</td><td class="r">− {{ f.desc_val|brl }}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    <div class="destaque"><span>Valor líquido atribuído ao pagamento</span><span>{{ f.repasse|brl }}</span></div>
+  </div>
+  {% else %}
+  <div class="section">
+    <div class="section-title">Base de cálculo do mês</div>
+    <div class="kv">
+      <div>Lucro líquido do mês (após {{ d.pct|round(2) }}% de despesas)</div><div class="v">{{ d.lucro_liquido|brl }}</div>
+      <div>Valor da hora diurna</div><div class="v">{{ d.taxa_dia|brl }}</div>
+      <div>Valor da hora noturna (acréscimo de 25%)</div><div class="v">{{ d.taxa_noite|brl }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Seu repasse</div>
+    <table>
+      <thead><tr><th>Descrição</th><th class="r">Horas</th><th class="r">Valor da hora</th><th class="r">Valor</th></tr></thead>
+      <tbody>
+        <tr><td>Horas noturnas trabalhadas</td><td class="r">{{ f.horas_noturnas|round(1) }}</td>
+            <td class="r">{{ d.taxa_noite|brl }}</td><td class="r">{{ f.valor_noturnas|brl }}</td></tr>
+        <tr><td>Horas diurnas trabalhadas</td><td class="r">{{ f.horas_diurnas|round(1) }}</td>
+            <td class="r">{{ d.taxa_dia|brl }}</td><td class="r">{{ f.valor_diurnas|brl }}</td></tr>
+        <tr><td colspan="3">Valor atribuído pela escala</td><td class="r fw">{{ f.atribuido|brl }}</td></tr>
+        <tr><td colspan="3">Serviços adicionais prestados</td><td class="r">{{ f.adicionais|brl }}</td></tr>
+      </tbody>
+    </table>
+    <div class="destaque"><span>Valor final de repasse</span><span>{{ f.repasse|brl }}</span></div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    <span>{{ marca.nome }} — emitido em {{ gerado_em.strftime('%d/%m/%Y') }}</span>
+    <span>{{ f.nome }} · {{ d.mes_nome }}/{{ d.ano }}</span>
+  </div>
+</div>
+</body>
+</html>

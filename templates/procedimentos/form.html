@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar Procedimento' if procedimento else 'Novo Procedimento' %}
+{% block title %}{{ titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% set fd = form_data %}
+{% set p = procedimento %}
+
+<div class="card" style="max-width:700px">
+  <div class="card-body">
+    <form method="post">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Código</label>
+          <input type="text" name="codigo" class="form-control"
+            value="{{ fd.get('codigo') or (p.codigo if p) or '' }}">
+        </div>
+        <div class="col-md-9">
+          <label class="form-label">Nome *</label>
+          <input type="text" name="nome" class="form-control" required
+            value="{{ fd.get('nome') or (p.nome if p) or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Categoria</label>
+          <select name="categoria" class="form-select">
+            {% for v, l in categorias %}
+            <option value="{{ v }}"
+              {% if (fd.get('categoria') or (p.categoria if p) or 'consulta') == v %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Valor Padrão (R$) *</label>
+          <input type="number" step="0.01" min="0" name="valor_padrao" class="form-control" required
+            value="{{ fd.get('valor_padrao') or (p.valor_padrao if p) or '0' }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Centro de Custo</label>
+          <select name="centro_custo_id" class="form-select">
+            <option value="">— Selecione —</option>
+            {% for cc in centros %}
+            <option value="{{ cc.id }}"
+              {% if (fd.get('centro_custo_id')|int if fd.get('centro_custo_id') else (p.centro_custo_id if p)) == cc.id %}selected{% endif %}>
+              {{ cc.nome }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Descrição</label>
+          <textarea name="descricao" class="form-control" rows="3">{{ fd.get('descricao') or (p.descricao if p) or '' }}</textarea>
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="ativo" id="ativo"
+              {% if (p.ativo if p is not none else True) %}checked{% endif %}>
+            <label class="form-check-label" for="ativo">Ativo</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        <a href="{{ url_for('procedimentos.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

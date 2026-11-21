@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Procedimentos — {{ marca.nome }}{% endblock %}
+{% block page_title %}Procedimentos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('procedimentos.novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Procedimento
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">Buscar</label>
+        <input type="text" name="q" class="form-control" placeholder="Nome do procedimento..." value="{{ q }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Categoria</label>
+        <select name="categoria" class="form-select">
+          <option value="">Todas</option>
+          {% for v, l in categorias %}
+          <option value="{{ v }}" {% if categoria == v %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-outline-primary w-100"><i class="bi bi-search me-1"></i>Filtrar</button>
+      </div>
+      {% if q or categoria %}
+      <div class="col-md-2">
+        <a href="{{ url_for('procedimentos.index') }}" class="btn btn-outline-secondary w-100">Limpar</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">{{ procedimentos|length }} procedimento(s)</div>
+  <div class="card-body p-0">
+    {% if procedimentos %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Código</th><th>Nome</th><th>Categoria</th><th>Valor Padrão</th><th>Centro de Custo</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for p in procedimentos %}
+          <tr>
+            <td><code>{{ p.codigo or '—' }}</code></td>
+            <td class="fw-semibold">{{ p.nome }}</td>
+            <td><span class="text-capitalize">{{ p.categoria }}</span></td>
+            <td class="text-positivo">{{ p.valor_padrao|brl }}</td>
+            <td>{{ p.centro_custo.nome if p.centro_custo else '—' }}</td>
+            <td>
+              {% if p.ativo %}<span class="badge bg-success">Ativo</span>
+              {% else %}<span class="badge bg-secondary">Inativo</span>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('procedimentos.editar', id=p.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                <form method="post" action="{{ url_for('procedimentos.excluir', id=p.id) }}" id="del-p-{{ p.id }}">
+                  <button type="button" class="btn btn-sm btn-outline-danger"
+                    onclick="confirmar('Excluir {{ p.nome }}?','del-p-{{ p.id }}')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-clipboard2-pulse" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhum procedimento encontrado.</p>
+      <a href="{{ url_for('procedimentos.novo') }}" class="btn btn-primary">Cadastrar Procedimento</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

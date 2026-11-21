@@ -1,0 +1,29 @@
+# Banco de dados — nunca versionar (dados reais de clientes + risco de
+# um push acidental sobrescrever o banco de produção no PythonAnywhere)
+instance/*.db
+instance/*.db-journal
+
+# Bytecode Python
+__pycache__/
+*.pyc
+
+# Configuração local do Claude Code (específica da máquina/usuário)
+.claude/settings.local.json
+
+# Ambiente virtual (se algum dia for criado)
+venv/
+.venv/
+
+# Logs e temporários
+*.log
+
+# backups do banco gerados por scripts de correção
+instance/backups/
+
+# chave secreta gerada automaticamente
+instance/secret.key
+
+# XMLs das notas fiscais (CPF das pacientes) e certificado digital — nunca versionar
+nf/
+*.pfx
+.env

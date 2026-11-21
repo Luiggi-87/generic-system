@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}Planos de Contrato — {{ marca.nome }}{% endblock %}
+{% block page_title %}Planos de Contrato{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <p class="text-muted mb-0">
+    Gerencie os planos oferecidos. Cada plano define serviços inclusos e o valor base do contrato.
+  </p>
+  <a href="{{ url_for('planos.novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Plano
+  </a>
+</div>
+
+{% if not planos %}
+<div class="card">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-file-earmark-text" style="font-size:3rem;opacity:.3"></i>
+    <p class="mt-3">Nenhum plano cadastrado ainda.</p>
+    <a href="{{ url_for('planos.novo') }}" class="btn btn-primary">
+      <i class="bi bi-plus-lg me-1"></i>Criar primeiro plano
+    </a>
+  </div>
+</div>
+{% else %}
+<div class="row g-3">
+  {% for p in planos %}
+  <div class="col-lg-4 col-md-6">
+    <div class="card h-100 {% if not p.ativo %}opacity-50{% endif %}">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-truncate me-2">
+          <i class="bi bi-file-earmark-medical me-1" style="color:var(--cm-primary)"></i>
+          {{ p.nome }}
+        </span>
+        {% if p.ativo %}
+          <span class="badge bg-success">Ativo</span>
+        {% else %}
+          <span class="badge bg-secondary">Inativo</span>
+        {% endif %}
+      </div>
+
+      <div class="card-body">
+        <!-- Valor -->
+        <div class="text-center mb-3">
+          <div class="text-muted small mb-1">Valor do contrato</div>
+          <div style="font-size:1.8rem;font-weight:700;color:var(--cm-primary-dark)">
+            {{ p.valor|brl }}
+          </div>
+          {% if p.parcelas_sem_taxa and p.parcelas_sem_taxa > 1 %}
+          <small class="text-muted">Parcelado em até {{ p.parcelas_sem_taxa }}× sem taxa</small>
+          {% endif %}
+        </div>
+
+        <!-- Descrição -->
+        {% if p.descricao %}
+        <p class="text-muted small mb-3">{{ p.descricao }}</p>
+        {% endif %}
+
+        <!-- Serviços inclusos -->
+        {% if p.itens %}
+        <div class="border-top pt-3">
+          <div class="text-muted small fw-bold mb-2">
+            <i class="bi bi-check-circle me-1" style="color:#1b5e20"></i>Serviços inclusos
+          </div>
+          <ul class="list-unstyled mb-0" style="font-size:.88rem">
+            {% for item in p.itens %}
+            <li class="mb-1">
+              <i class="bi bi-dot" style="color:var(--cm-primary)"></i>
+              {% if item.quantidade > 1 %}
+                <strong>{{ item.quantidade }}×</strong>
+              {% endif %}
+              {{ item.servico }}
+              {% if item.descricao %}
+                <small class="text-muted d-block ms-3">{{ item.descricao }}</small>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <!-- Clientes -->
+        {% if p.total_clientes > 0 %}
+        <div class="mt-3 pt-2 border-top">
+          <small class="text-muted">
+            <i class="bi bi-people me-1"></i>
+            <strong>{{ p.total_clientes }}</strong> cliente(s) com este plano
+          </small>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="card-footer bg-transparent d-flex gap-2">
+        <a href="{{ url_for('planos.editar', id=p.id) }}" class="btn btn-sm btn-outline-primary flex-fill">
+          <i class="bi bi-pencil me-1"></i>Editar
+        </a>
+        <form method="post" action="{{ url_for('planos.toggle_ativo', id=p.id) }}" class="flex-fill">
+          <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
+            {% if p.ativo %}
+              <i class="bi bi-pause-circle me-1"></i>Desativar
+            {% else %}
+              <i class="bi bi-play-circle me-1"></i>Ativar
+            {% endif %}
+          </button>
+        </form>
+        {% if p.total_clientes == 0 %}
+        <form method="post" action="{{ url_for('planos.excluir', id=p.id) }}"
+              onsubmit="return confirm('Excluir o plano {{ p.nome }}?')">
+          <button type="submit" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

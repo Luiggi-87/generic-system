@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+{% block title %}Atendimento #{{ atendimento.id }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}Detalhes do Atendimento{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h5 class="mb-1">{{ atendimento.cliente.nome }}</h5>
+    <span class="text-muted small">
+      {{ atendimento.data_atendimento|data_br }}
+      {% if atendimento.hora_atendimento %} às {{ atendimento.hora_atendimento }}{% endif %}
+      &nbsp;•&nbsp; <span class="text-capitalize">{{ atendimento.tipo }}</span>
+    </span>
+    {% if atendimento.valor_total and current_user.eh_admin %}   {# para quem vai o valor: só a administração #}
+    <div class="small mt-1">
+      <i class="bi bi-people me-1"></i>Valor:
+      {% if atendimento.funcionario %}<strong>somente {{ atendimento.funcionario.nome }}</strong>{% else %}<strong>rateio da folha</strong>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if atendimento.status == 'agendado' %}
+    <form method="post" action="{{ url_for('atendimentos.realizar', id=atendimento.id) }}" id="form-realizar">
+      <button type="button" class="btn btn-success btn-sm"
+        onclick="confirmar('Confirmar realização e gerar lançamentos financeiros?','form-realizar')">
+        <i class="bi bi-check2-circle me-1"></i>Marcar como Realizado
+      </button>
+    </form>
+    {% endif %}
+    {% if atendimento.status in ('agendado', 'realizado') %}
+    <a href="{{ url_for('atendimentos.editar', id=atendimento.id) }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Editar
+    </a>
+    {% endif %}
+    {% if atendimento.status == 'agendado' %}
+    <form method="post" action="{{ url_for('atendimentos.cancelar', id=atendimento.id) }}" id="form-cancelar">
+      <button type="button" class="btn btn-outline-danger btn-sm"
+        onclick="confirmar('Cancelar este atendimento?','form-cancelar')">
+        <i class="bi bi-x-circle me-1"></i>Cancelar
+      </button>
+    </form>
+    {% endif %}
+    {% set tem_recebido = atendimento.lancamentos | selectattr('status', 'in', ['recebido', 'pago']) | list | length > 0 %}
+    {% if not tem_recebido %}
+    <form method="post" action="{{ url_for('atendimentos.excluir', id=atendimento.id) }}" id="form-excluir">
+      <button type="button" class="btn btn-outline-danger btn-sm"
+        onclick="confirmar('Excluir este atendimento permanentemente? Esta ação não pode ser desfeita.','form-excluir')">
+        <i class="bi bi-trash me-1"></i>Excluir
+      </button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('atendimentos.index') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+  </div>
+</div>
+
+<!-- Status badge -->
+<div class="mb-3">
+  {% if atendimento.status == 'agendado' %}
+  <span class="badge bg-warning text-dark fs-6">Agendado</span>
+  {% elif atendimento.status == 'realizado' %}
+  <span class="badge bg-success fs-6">Realizado</span>
+  {% else %}
+  <span class="badge bg-secondary fs-6">Cancelado</span>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <!-- Procedimentos -->
+    <div class="card mb-3">
+      <div class="card-header">Procedimentos</div>
+      <div class="card-body p-0">
+        {% if atendimento.itens %}
+        <div class="table-responsive">
+          <table class="table mb-0">
+            <thead><tr><th>Procedimento</th><th>Qtd.</th><th>Valor Unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              {% for item in atendimento.itens %}
+              <tr>
+                <td>{{ item.procedimento.nome }}</td>
+                <td>{{ item.quantidade }}</td>
+                <td>{{ item.valor_unitario|brl }}</td>
+                <td class="fw-bold">{{ item.valor_total|brl }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="table-light">
+                <td colspan="3" class="text-end fw-bold">Total</td>
+                <td class="fw-bold text-positivo">{{ atendimento.valor_total|brl }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3">Nenhum procedimento registrado.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Lançamentos financeiros -->
+    {% if atendimento.lancamentos %}
+    <div class="card">
+      <div class="card-header">Lançamentos Financeiros</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table mb-0">
+            <thead><tr><th>Descrição</th><th>Competência</th><th>Valor</th><th>Status</th><th>Pagamento</th><th></th></tr></thead>
+            <tbody>
+              {% for l in atendimento.lancamentos %}
+              <tr>
+                <td>{{ l.descricao }}</td>
+                <td>{{ l.data_competencia|data_br }}</td>
+                <td class="text-positivo fw-bold">{{ l.valor|brl }}</td>
+                <td><span class="badge bg-{{ l.status_class }}">{{ l.status_label }}</span>
+                  {% if l.vencido %}<span class="badge badge-vencido ms-1">Vencido</span>{% endif %}
+                </td>
+                <td>{{ l.data_pagamento|data_br }}</td>
+                <td>
+                  {% if l.status == 'pendente' %}
+                  <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                    data-bs-target="#modal-pagar-{{ l.id }}">
+                    <i class="bi bi-cash-coin"></i> Receber
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header">Informações</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:.88rem">
+          <dt class="col-5 text-muted">Cliente</dt>
+          <dd class="col-7">
+            <a href="{{ url_for('clientes.detail', id=atendimento.cliente_id) }}" class="text-decoration-none">
+              {{ atendimento.cliente.nome }}
+            </a>
+          </dd>
+          <dt class="col-5 text-muted">Data</dt>
+          <dd class="col-7">{{ atendimento.data_atendimento|data_br }}</dd>
+          <dt class="col-5 text-muted">Hora</dt>
+          <dd class="col-7">{{ atendimento.hora_atendimento or '—' }}</dd>
+          <dt class="col-5 text-muted">Tipo</dt>
+          <dd class="col-7 text-capitalize">{{ atendimento.tipo }}</dd>
+          <dt class="col-5 text-muted">Valor Total</dt>
+          <dd class="col-7 fw-bold text-positivo">{{ atendimento.valor_total|brl }}</dd>
+        </dl>
+      </div>
+    </div>
+    {% if atendimento.observacoes %}
+    <div class="card">
+      <div class="card-header">Observações</div>
+      <div class="card-body">
+        <p class="mb-0" style="font-size:.9rem">{{ atendimento.observacoes }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modais de pagamento -->
+{% for l in atendimento.lancamentos %}
+{% if l.status == 'pendente' %}
+<div class="modal fade" id="modal-pagar-{{ l.id }}" tabindex="-1" data-valor="{{ l.valor }}">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Registrar Recebimento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('financeiro.registrar_pagamento', id=l.id) }}">
+        <div class="modal-body">
+          <p class="mb-1"><strong>{{ l.descricao }}</strong></p>
+          <p class="mb-3 text-positivo fw-bold">Bruto: {{ l.valor|brl }}</p>
+          <div class="mb-3">
+            <label class="form-label">Data do Recebimento</label>
+            <input type="date" name="data_pagamento" class="form-control dp-hoje">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Forma de Pagamento</label>
+            <select name="forma_pagamento" class="form-select">
+              {% for v, lab in formas_ativas %}<option value="{{ v }}">{{ lab }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 div-operadora" style="display:none">
+            <label class="form-label">Operadora</label>
+            <select name="operadora" class="form-select">
+              {% for v, lab in operadoras_ativas %}
+              <option value="{{ v }}" {% if v == operadora_padrao_hoje %}selected{% endif %}>{{ lab }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3 div-parcelas" style="display:none">
+            <label class="form-label">Parcelas do Cartão</label>
+            <select name="parcelas" class="form-select">
+              <option value="1">1x — à vista</option>
+              {% for n in range(2, 13) %}
+              <option value="{{ n }}">{{ n }}x</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="taxa-info rounded p-2" style="display:none;background:var(--cm-bg);font-size:.88rem"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('[id^="dp-"]').forEach(el => {
+  el.value = new Date().toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

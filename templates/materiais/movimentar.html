@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Estoque — {{ material.nome }}{% endblock %}
+{% block page_title %}Movimentação de Estoque{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header">{{ material.nome }}</div>
+      <div class="card-body">
+        <dl class="row mb-3" style="font-size:.88rem">
+          <dt class="col-6 text-muted">Código</dt>
+          <dd class="col-6"><code>{{ material.codigo or '—' }}</code></dd>
+          <dt class="col-6 text-muted">Unidade</dt>
+          <dd class="col-6">{{ material.unidade_medida }}</dd>
+          <dt class="col-6 text-muted">Valor Unit.</dt>
+          <dd class="col-6">{{ material.valor_unitario|brl }}</dd>
+          <dt class="col-6 text-muted">Qtd. Mínima</dt>
+          <dd class="col-6">{{ material.quantidade_minima }} {{ material.unidade_medida }}</dd>
+        </dl>
+        <div class="text-center p-3 rounded" style="background:{% if material.estoque_baixo %}#fdecea{% else %}#e8f5e9{% endif %}">
+          <div style="font-size:.8rem;color:#666">ESTOQUE ATUAL</div>
+          <div style="font-size:2.5rem;font-weight:700;color:{% if material.estoque_baixo %}#c62828{% else %}#2e7d32{% endif %}">
+            {{ material.quantidade_atual }}
+          </div>
+          <div style="font-size:.85rem;color:#888">{{ material.unidade_medida }}</div>
+          {% if material.estoque_baixo %}
+          <span class="badge bg-danger mt-1">Estoque Abaixo do Mínimo</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulário de movimentação -->
+    <div class="card">
+      <div class="card-header">Registrar Movimentação</div>
+      <div class="card-body">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label">Tipo *</label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="tipo" value="entrada" id="entrada" checked>
+                <label class="form-check-label text-success fw-bold" for="entrada"><i class="bi bi-arrow-down-circle me-1"></i>Entrada</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="tipo" value="saida" id="saida">
+                <label class="form-check-label text-danger fw-bold" for="saida"><i class="bi bi-arrow-up-circle me-1"></i>Saída</label>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Quantidade *</label>
+            <div class="input-group">
+              <input type="number" step="0.01" min="0.01" name="quantidade" class="form-control" required placeholder="0">
+              <span class="input-group-text">{{ material.unidade_medida }}</span>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Valor Unitário (R$)</label>
+            <input type="number" step="0.01" min="0" name="valor_unitario" class="form-control"
+              value="{{ material.valor_unitario }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Data</label>
+            <input type="date" name="data" class="form-control" value="{{ now_date }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Motivo</label>
+            <select name="motivo" class="form-select">
+              <option value="Compra">Compra</option>
+              <option value="Devolução">Devolução</option>
+              <option value="Uso em atendimento">Uso em atendimento</option>
+              <option value="Descarte">Descarte</option>
+              <option value="Ajuste de inventário">Ajuste de inventário</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Observações</label>
+            <textarea name="observacoes" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check-lg me-1"></i>Registrar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Histórico -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">Histórico de Movimentações (últimas 20)</div>
+      <div class="card-body p-0">
+        {% if movimentos %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Qtd.</th><th>Valor Unit.</th><th>Valor Total</th><th>Motivo</th></tr></thead>
+            <tbody>
+              {% for mov in movimentos %}
+              <tr>
+                <td>{{ mov.data|data_br }}</td>
+                <td>
+                  {% if mov.tipo == 'entrada' %}
+                  <span class="badge bg-success"><i class="bi bi-arrow-down me-1"></i>Entrada</span>
+                  {% else %}
+                  <span class="badge bg-danger"><i class="bi bi-arrow-up me-1"></i>Saída</span>
+                  {% endif %}
+                </td>
+                <td class="{{ 'text-success' if mov.tipo == 'entrada' else 'text-danger' }} fw-bold">
+                  {{ '+' if mov.tipo == 'entrada' else '-' }}{{ mov.quantidade }} {{ material.unidade_medida }}
+                </td>
+                <td>{{ mov.valor_unitario|brl }}</td>
+                <td>{{ mov.valor_total|brl }}</td>
+                <td>{{ mov.motivo or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">Nenhuma movimentação registrada.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('input[name=data]').value = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}

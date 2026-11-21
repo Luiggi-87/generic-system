@@ -1,0 +1,18 @@
+{
+  "nome": "Sua Marca",
+  "subtitulo": "Sistema de Gestão",
+  "slogan": "Gestão clínica e financeira",
+  "icone": "heart-pulse-fill",
+  "logo": "",
+  "cor_primaria": "#1d6fa5",
+  "cor_primaria_escura": "#0f4c75",
+  "cor_secundaria": "#6a4c93",
+  "cor_destaque": "#cfe6f5",
+  "cor_menu": "#0b2a40",
+  "cor_menu_texto": "#d6e6f2",
+  "cor_fundo": "#f2f5f8",
+  "email_admin": "admin@exemplo.com",
+  "aliquota_iss": 0.06,
+  "fator_hora_noturna": 1.25,
+  "rateio_custos_desde": "2000-01"
+}

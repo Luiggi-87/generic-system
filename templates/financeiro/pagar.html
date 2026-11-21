@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Contas a Pagar — {{ marca.nome }}{% endblock %}
+{% block page_title %}Contas a Pagar{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('financeiro.novo_lancamento') }}#despesa" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Nova Despesa
+  </a>
+</div>
+
+<div class="mb-3 d-flex gap-2">
+  <a href="?status=pendente" class="btn btn-sm {{ 'btn-warning' if status == 'pendente' else 'btn-outline-secondary' }}">Pendentes</a>
+  <a href="?status=pago" class="btn btn-sm {{ 'btn-success' if status == 'pago' else 'btn-outline-secondary' }}">Pagos</a>
+  <a href="?status=" class="btn btn-sm {{ 'btn-primary' if not status else 'btn-outline-secondary' }}">Todos</a>
+</div>
+
+<div class="row g-2 mb-3">
+  <div class="col-md-4">
+    <div class="rounded p-3 d-flex justify-content-between" style="background:#fdecea">
+      <span class="text-muted small fw-bold">TOTAL FILTRADO</span>
+      <span class="text-negativo fw-bold fs-5">{{ total|brl }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if lancamentos %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Competência</th><th>Descrição</th><th>Centro de Custo</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(mes='-') %}
+          {% set nomes_mes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'] %}
+          {% set totais_mes = {} %}
+          {% for l in lancamentos %}
+            {% set k = (l.data_vencimento.year, l.data_vencimento.month) if l.data_vencimento else None %}
+            {% set _ = totais_mes.update({k: totais_mes.get(k, 0) + l.valor}) %}
+          {% endfor %}
+          {% for l in lancamentos %}
+          {# linha separando os meses de vencimento (a lista já vem ordenada por vencimento) #}
+          {% set mes_venc = (l.data_vencimento.year, l.data_vencimento.month) if l.data_vencimento else None %}
+          {% if mes_venc != ns.mes %}
+          {% set ns.mes = mes_venc %}
+          {% set estilo = 'background:#f3e5f5;color:#6a1b4d;border-top:3px solid #8e1b5b;border-bottom:1px solid var(--cm-accent)' %}
+          <tr class="fw-bold">
+            <td colspan="3" class="py-2" style="{{ estilo }}">{{ (nomes_mes[mes_venc[1] - 1] ~ '/' ~ mes_venc[0]) if mes_venc else 'Sem vencimento' }}</td>
+            <td class="py-2" style="{{ estilo }}" title="Total do mês">{{ totais_mes[mes_venc]|brl }}</td>
+            <td colspan="3" style="{{ estilo }}"></td>
+          </tr>
+          {% endif %}
+          <tr {% if l.vencido %}class="table-danger"{% endif %}>
+            <td class="text-muted small">{{ l.data_competencia|data_br }}</td>
+            <td>{{ l.descricao }}</td>
+            <td class="text-muted small">{{ l.centro_custo.nome if l.centro_custo else '—' }}</td>
+            <td class="text-negativo fw-bold">{{ l.valor|brl }}</td>
+            <td>
+              {{ l.data_vencimento|data_br }}
+              {% if l.vencido %}<span class="badge badge-vencido ms-1">Vencido</span>{% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ l.status_class }}">{{ l.status_label }}</span>
+              {% if l.data_pagamento %}<br><small class="text-muted">{{ l.data_pagamento|data_br }}</small>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1 align-items-center">
+                {% if l.bloqueado %}
+                <span class="text-muted d-flex align-items-center gap-1" style="font-size:.8rem"
+                      title="Gerado pela Folha de Pagamento — protegido contra alterações">
+                  <i class="bi bi-lock-fill"></i>
+                  <span class="small">Folha</span>
+                </span>
+                {% else %}
+                  {% if l.status == 'pendente' %}
+                  <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                    data-bs-target="#modal-pag-{{ l.id }}" title="Pagar">
+                    <i class="bi bi-cash-coin me-1"></i>Pagar
+                  </button>
+                  {% endif %}
+                  <a href="{{ url_for('financeiro.editar_lancamento', id=l.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-wallet2" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhuma despesa encontrada.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% for l in lancamentos %}
+{% if l.status == 'pendente' %}
+<div class="modal fade" id="modal-pag-{{ l.id }}" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Registrar Pagamento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('financeiro.registrar_pagamento', id=l.id) }}">
+        <div class="modal-body">
+          <p class="mb-1"><strong>{{ l.descricao }}</strong></p>
+          <p class="mb-3 fs-5 fw-bold text-negativo">{{ l.valor|brl }}</p>
+          <div class="mb-3">
+            <label class="form-label">Data do Pagamento</label>
+            <input type="date" name="data_pagamento" class="form-control dp-hoje">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Forma de Pagamento</label>
+            <select name="forma_pagamento" class="form-select">
+              {% for v, lab in formas %}
+              <option value="{{ v }}" {% if l.forma_pagamento == v %}selected{% endif %}>{{ lab }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.dp-hoje').forEach(el => {
+  el.value = new Date().toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

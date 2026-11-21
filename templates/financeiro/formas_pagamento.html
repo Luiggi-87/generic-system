@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+{% block title %}Formas de Pagamento — {{ marca.nome }}{% endblock %}
+{% block page_title %}Formas de Pagamento{% endblock %}
+
+{% macro pct(v) %}{{ ('%.2f'|format(v))|replace('.', ',') }}%{% endmacro %}
+{% set tipos = {'nenhuma': 'Sem taxa', 'debito': 'Taxa de débito', 'credito': 'Taxa de crédito (por parcela)'} %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- Lista -->
+  <div class="col-lg-9">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-credit-card-2-front me-1" style="color:var(--cm-primary)"></i>
+        Formas cadastradas
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Taxa</th>
+                <th>Prazo de recebimento</th>
+                <th class="text-center">Usos</th>
+                <th>Situação</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in formas %}
+              {% set tipo = f.tipo_taxa or 'nenhuma' %}
+              <tr {% if not f.ativo %}class="text-muted"{% endif %}>
+                <td>
+                  <span class="fw-semibold">{{ f.nome }}</span>
+                  {% if f.padrao %}<span class="badge bg-light text-dark ms-1">do sistema</span>{% endif %}
+                  {% if f.observacoes %}<div class="small text-muted" style="white-space:pre-line">{{ f.observacoes }}</div>{% endif %}
+                </td>
+                <td class="small">
+                  {% if tipo == 'nenhuma' %}
+                    Sem taxa
+                  {% else %}
+                    {% for o in operadoras if o.ativo %}
+                      <div>{{ o.nome }}:
+                        {% if tipo == 'debito' %}{{ pct(o.tabela.debito) }}
+                        {% elif o.tabela.credito %}{{ pct(o.tabela.credito.values()|first) }} a {{ pct(o.tabela.credito.values()|list|last) }}{% endif %}
+                      </div>
+                    {% endfor %}
+                    <a href="#tabela-taxas" class="small">ver tabela</a>
+                  {% endif %}
+                </td>
+                <td class="small">{{ f.prazo or '—' }}</td>
+                <td class="text-center">{{ usos.get(f.codigo, 0) }}</td>
+                <td>
+                  {% if f.ativo %}<span class="badge bg-success">Liberada</span>
+                  {% else %}<span class="badge bg-secondary">Bloqueada</span>{% endif %}
+                </td>
+                <td class="text-end text-nowrap">
+                  <button type="button" class="btn btn-sm btn-outline-primary btn-editar-forma"
+                          data-id="{{ f.id }}" data-nome="{{ f.nome }}"
+                          data-prazo="{{ f.prazo or '' }}" data-obs="{{ f.observacoes or '' }}"
+                          data-tipo="{{ tipo }}"
+                          data-travada="{{ '1' if f.codigo in ('cartao_debito', 'cartao_credito') else '' }}"
+                          data-bs-toggle="modal" data-bs-target="#modalEditarForma">
+                    <i class="bi bi-pencil me-1"></i>Editar
+                  </button>
+                  <form method="post" action="{{ url_for('financeiro.alternar_forma_pagamento', id=f.id) }}" class="d-inline">
+                    {% if f.ativo %}
+                    <button class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('Bloquear {{ f.nome | e }}? Ela deixa de aparecer nos formulários; os lançamentos antigos não mudam.')">
+                      <i class="bi bi-slash-circle me-1"></i>Bloquear
+                    </button>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-success">
+                      <i class="bi bi-check-circle me-1"></i>Liberar
+                    </button>
+                    {% endif %}
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3">
+    <!-- Nova forma -->
+    <div class="card">
+      <div class="card-header">Nova forma de pagamento</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('financeiro.nova_forma_pagamento') }}">
+          <label class="form-label">Nome</label>
+          <input type="text" name="nome" class="form-control mb-2" maxlength="100"
+                 placeholder="Ex.: Boleto, Convênio…" required>
+          <label class="form-label">Taxa</label>
+          <select name="tipo_taxa" class="form-select mb-2">
+            {% for v, lab in tipos.items() %}<option value="{{ v }}">{{ lab }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-primary w-100"><i class="bi bi-plus-lg me-1"></i>Cadastrar</button>
+          <div class="form-text mt-2">
+            "Taxa de débito/crédito" usa a tabela da operadora escolhida no pagamento.
+            Depois use <em>Editar</em> para prazo e observações.
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Operadoras e taxas -->
+<div class="card mt-3" id="tabela-taxas">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span>
+      <i class="bi bi-percent me-1" style="color:var(--cm-primary)"></i>
+      Operadoras e taxas (maquininhas e link de pagamento)
+    </span>
+    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaOperadora">
+      <i class="bi bi-plus-lg me-1"></i>Nova operadora
+    </button>
+  </div>
+  <div class="card-body">
+    <p class="small text-muted mb-3">
+      Cada operadora tem a sua tabela: débito e crédito por parcela. Use uma operadora para cada
+      maquininha e outra para o <strong>link de pagamento</strong> (com as taxas do link). Edite as taxas
+      nos campos (use vírgula, ex.: 3,34) e clique em salvar. "Líquido" é quanto fica de cada R$ 1.000,00.
+      Mudanças valem para <strong>novos</strong> pagamentos; os já registrados mantêm a taxa original.
+    </p>
+    <div class="row g-3">
+      {% for o in operadoras %}
+      <div class="col-md-6">
+        <form method="post" action="{{ url_for('financeiro.salvar_taxas_operadora', operadora=o.codigo) }}"
+              class="{% if not o.ativo %}opacity-75{% endif %}">
+          <div class="d-flex gap-2 align-items-center mb-2">
+            <input type="text" name="nome" value="{{ o.nome }}" maxlength="100"
+                   class="form-control form-control-sm fw-bold" style="max-width:15rem" required>
+            {% if not o.ativo %}<span class="badge bg-secondary">Bloqueada</span>{% endif %}
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-2">
+              <thead>
+                <tr><th>Modalidade</th><th class="text-end" style="width:9rem">Taxa (%)</th><th class="text-end">Líquido / R$ 1.000</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Débito</td>
+                  <td><input type="text" inputmode="decimal" name="debito" class="form-control form-control-sm text-end campo-taxa"
+                             value="{{ ('%.2f'|format(o.tabela.debito))|replace('.', ',') }}"></td>
+                  <td class="text-end liquido">R$ {{ ('%.2f'|format(1000 * (1 - o.tabela.debito / 100)))|replace('.', ',') }}</td>
+                </tr>
+                {% for parc, taxa in o.tabela.credito.items() %}
+                <tr>
+                  <td>Crédito {{ 'à vista' if parc == 1 else parc ~ 'x' }}</td>
+                  <td><input type="text" inputmode="decimal" name="credito_{{ parc }}" class="form-control form-control-sm text-end campo-taxa"
+                             value="{{ ('%.2f'|format(taxa))|replace('.', ',') }}"></td>
+                  <td class="text-end liquido">R$ {{ ('%.2f'|format(1000 * (1 - taxa / 100)))|replace('.', ',') }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+            {% if o.id %}
+            <button type="submit" formaction="{{ url_for('financeiro.alternar_operadora', id=o.id) }}" formnovalidate
+                    class="btn btn-sm {{ 'btn-outline-success' if not o.ativo else 'btn-outline-danger' }}"
+                    onclick="return confirm('{{ 'Liberar' if not o.ativo else 'Bloquear' }} {{ o.nome | e }}?')">
+              <i class="bi {{ 'bi-check-circle' if not o.ativo else 'bi-slash-circle' }} me-1"></i>{{ 'Liberar' if not o.ativo else 'Bloquear' }}
+            </button>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Modal nova operadora -->
+<div class="modal fade" id="modalNovaOperadora" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('financeiro.nova_operadora') }}">
+        <div class="modal-header py-2">
+          <h6 class="modal-title">Nova operadora</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nome</label>
+            <input type="text" name="nome" class="form-control" maxlength="100"
+                   placeholder="Ex.: Infinite Pay — Link" required>
+          </div>
+          <div class="mb-1">
+            <label class="form-label">Parcelas máximas (1 a 18)</label>
+            <input type="number" name="parcelas_max" class="form-control" min="1" max="18" value="12">
+            <div class="form-text">As taxas começam em 0,00% — preencha em seguida.</div>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Cadastrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal editar forma -->
+<div class="modal fade" id="modalEditarForma" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="form-editar-forma" method="post" action="">
+        <div class="modal-header py-2">
+          <h6 class="modal-title">Editar forma de pagamento</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nome</label>
+            <input type="text" name="nome" id="editar-forma-nome" class="form-control" maxlength="100" required>
+            <div class="form-text">Os lançamentos antigos passam a mostrar o novo nome.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Taxa</label>
+            <select name="tipo_taxa" id="editar-forma-tipo" class="form-select">
+              {% for v, lab in tipos.items() %}<option value="{{ v }}">{{ lab }}</option>{% endfor %}
+            </select>
+            <div class="form-text" id="editar-forma-tipo-aviso"></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Prazo de recebimento</label>
+            <input type="text" name="prazo" id="editar-forma-prazo" class="form-control" maxlength="200"
+                   placeholder="Ex.: Imediato, D+1, 30 dias">
+          </div>
+          <div class="mb-1">
+            <label class="form-label">Observações</label>
+            <textarea name="observacoes" id="editar-forma-obs" class="form-control" rows="3"
+                      placeholder="Condições, limites, regras do contrato com a operadora…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.campo-taxa').forEach(function (inp) {
+  inp.addEventListener('input', function () {
+    var v = parseFloat(this.value.replace(',', '.'));
+    var cel = this.closest('tr').querySelector('.liquido');
+    cel.textContent = isNaN(v) ? '—' :
+      'R$ ' + (1000 * (1 - v / 100)).toFixed(2).replace('.', ',');
+  });
+});
+document.querySelectorAll('.btn-editar-forma').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.getElementById('editar-forma-nome').value = this.dataset.nome;
+    document.getElementById('editar-forma-prazo').value = this.dataset.prazo;
+    document.getElementById('editar-forma-obs').value = this.dataset.obs;
+    var sel = document.getElementById('editar-forma-tipo');
+    sel.value = this.dataset.tipo;
+    sel.disabled = !!this.dataset.travada;
+    document.getElementById('editar-forma-tipo-aviso').textContent =
+      this.dataset.travada ? 'Forma de cartão do sistema: o tipo de taxa não pode ser alterado.' : '';
+    document.getElementById('form-editar-forma').action =
+      '/financeiro/formas-pagamento/' + this.dataset.id + '/editar';
+  });
+});
+</script>
+{% endblock %}

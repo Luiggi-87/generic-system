@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% block title %}Contratos × ISS — {{ marca.nome }}{% endblock %}
+{% block page_title %}Contratos × Notas Fiscais × ISS{% endblock %}
+
+{% block extra_head %}
+<style>
+@media print {
+  #sidebar,#topbar,#btn-toggle-sidebar,#sidebar-overlay,.no-print{display:none!important}
+  #main{margin-left:0!important}
+  .content-area{padding:0!important}
+  .card{box-shadow:none!important;border:1px solid #ddd!important}
+  body{background:#fff!important}
+}
+.kpi-mini{border-radius:.5rem;padding:.75rem 1rem}
+.kpi-mini .lbl{font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+.kpi-mini .val{font-size:1.4rem;font-weight:700;line-height:1.2}
+.kpi-mini .sub{font-size:.75rem;margin-top:2px;color:#999}
+.prog-bar{height:10px;border-radius:5px;overflow:hidden;display:flex}
+.prog-pago{background:#388e3c}
+.prog-apagar{background:#f0ad4e}
+.prog-fut{background:#e65100}
+.row-pago{background:#f6fbf6}
+.row-apagar{background:#fffdf0}
+.row-semNF{background:#fff8f0}
+.badge-pago{background:#d4edda;color:#155724}
+.badge-apagar{background:#fff3cd;color:#856404}
+.badge-estimado{background:#fde8d8;color:#854F0B}
+.badge-emitida{background:#cce5ff;color:#004085}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filtros -->
+<div class="card mb-3 no-print">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="gerar" value="1">
+      <div class="col-auto">
+        <label class="form-label small fw-bold mb-1">Período</label>
+        <input type="month" name="periodo" value="{{ periodo }}" class="form-control form-control-sm" style="min-width:150px">
+        <div class="form-text" style="font-size:.7rem">Vazio = todo o histórico</div>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-bold mb-1">Status ISS</label>
+        <select name="status_iss" class="form-select form-select-sm">
+          <option value="" {% if not status_filtro %}selected{% endif %}>Todos</option>
+          <option value="pago" {% if status_filtro=='pago' %}selected{% endif %}>ISS Pago</option>
+          <option value="a_pagar" {% if status_filtro=='a_pagar' %}selected{% endif %}>ISS a Pagar</option>
+          <option value="estimado" {% if status_filtro=='estimado' %}selected{% endif %}>Sem NF (estimado)</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search me-1"></i>Gerar
+        </button>
+      </div>
+      {% if dados %}
+      <div class="col-auto">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Imprimir / PDF
+        </button>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% if not dados %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-receipt" style="font-size:3rem;opacity:.2"></i>
+  <p class="mt-2">Clique em <strong>Gerar</strong> para carregar os dados.</p>
+</div>
+
+{% else %}
+
+<!-- Cabeçalho do relatório -->
+<div class="mb-3" style="border-bottom:2px solid var(--cm-primary);padding-bottom:.75rem">
+  <div style="color:var(--cm-primary);font-size:.8rem;font-weight:700">♥ {{ marca.nome }}</div>
+  <div class="fw-bold" style="font-size:1.3rem">Contratos × Notas Fiscais × ISS</div>
+  <div class="text-muted small">
+    {{ periodo_label }} · Gerado em {{ hoje|data_br }} · Confidencial
+    {% if status_filtro %}· Filtro: {{ status_filtro|replace('pago','ISS Pago')|replace('a_pagar','ISS a Pagar')|replace('estimado','Sem NF') }}{% endif %}
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#f3f0fe">
+      <div class="lbl" style="color:#3C3489">Total contratos</div>
+      <div class="val" style="color:#26215C">{{ dados.total_contratos|brl }}</div>
+      <div class="sub">Base para emissão de NF</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#d4edda">
+      <div class="lbl" style="color:#155724">ISS pago</div>
+      <div class="val" style="color:#155724">{{ dados.total_iss_pago|brl }}</div>
+      <div class="sub">{{ dados.count_pago }} NF(s) · imposto quitado</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#fff3cd">
+      <div class="lbl" style="color:#856404">ISS a pagar</div>
+      <div class="val" style="color:#664d03">{{ dados.total_iss_a_pagar|brl }}</div>
+      <div class="sub">{{ dados.count_a_pagar }} NF(s) emitida(s) · pendente</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#fde8d8">
+      <div class="lbl" style="color:#854F0B">ISS estimado</div>
+      <div class="val" style="color:#633806">{{ dados.total_iss_estimado|brl }}</div>
+      <div class="sub">{{ dados.count_sem_nf }} contrato(s) sem NF · 6%</div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de composição do ISS -->
+{% if dados.total_iss > 0 %}
+<div class="card mb-3">
+  <div class="card-header">
+    Composição do ISS total — {{ dados.total_iss|brl }}
+  </div>
+  <div class="card-body">
+    <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:5px">
+      <span style="color:#155724;font-weight:600">Pago {{ dados.pct_pago }}%</span>
+      <span style="color:#856404;font-weight:600">A pagar {{ dados.pct_a_pagar }}%</span>
+      <span style="color:#854F0B;font-weight:600">Estimado sem NF {{ dados.pct_estimado }}%</span>
+    </div>
+    <div class="prog-bar" style="background:var(--cm-bg)">
+      <div class="prog-pago" style="width:{{ dados.pct_pago }}%"></div>
+      <div class="prog-apagar" style="width:{{ dados.pct_a_pagar }}%"></div>
+      <div class="prog-fut" style="width:{{ dados.pct_estimado }}%"></div>
+    </div>
+    <div class="d-flex gap-3 mt-2" style="font-size:.75rem;color:#888">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#388e3c;margin-right:3px"></span>Pago</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f0ad4e;margin-right:3px"></span>NF emitida, ISS pendente</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#e65100;margin-right:3px"></span>Sem NF — estimado</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Tabela detalhada -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Detalhamento por cliente</span>
+    <div class="d-flex gap-1">
+      <span class="badge badge-pago" style="font-size:.72rem">{{ dados.count_pago }} pago(s)</span>
+      <span class="badge badge-apagar" style="font-size:.72rem">{{ dados.count_a_pagar }} a pagar</span>
+      <span class="badge badge-estimado" style="font-size:.72rem">{{ dados.count_sem_nf }} sem NF</span>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    {% if dados.rows %}
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th class="text-end">Valor contrato</th>
+            <th>NF</th>
+            <th class="text-end">Valor NF</th>
+            <th class="text-end">ISS (6%)</th>
+            <th>Status NF</th>
+            <th>Status ISS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in dados.rows %}
+          <tr class="
+            {% if r.status_iss == 'pago' %}row-pago
+            {% elif r.status_iss == 'a_pagar' %}row-apagar
+            {% else %}row-semNF{% endif %}">
+            <td class="fw-semibold">{{ r.cliente.nome }}</td>
+            <td class="text-end">{{ r.valor_contrato|brl }}</td>
+            <td>
+              {% if r.nf_numero %}
+              <span class="badge badge-emitida" style="font-size:.72rem">{{ r.nf_numero }}</span>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              {% if r.valor_nf %}
+              <span class="text-positivo">{{ r.valor_nf|brl }}</span>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end fw-semibold">
+              {% if r.status_iss == 'pago' %}
+                <span style="color:#155724">{{ r.iss|brl }}</span>
+              {% elif r.status_iss == 'a_pagar' %}
+                <span style="color:#856404">{{ r.iss|brl }}</span>
+              {% else %}
+                <span style="color:#854F0B">{{ r.iss|brl }} *</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.status_nf == 'emitida' %}
+                <span class="badge badge-emitida" style="font-size:.72rem">Emitida</span>
+              {% else %}
+                <span class="badge badge-estimado" style="font-size:.72rem">Sem NF</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.status_iss == 'pago' %}
+                <span class="badge badge-pago" style="font-size:.72rem">Pago</span>
+              {% elif r.status_iss == 'a_pagar' %}
+                <span class="badge badge-apagar" style="font-size:.72rem">A pagar</span>
+              {% else %}
+                <span class="badge badge-estimado" style="font-size:.72rem">Estimado</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="fw-bold">
+            <td>Total</td>
+            <td class="text-end">{{ dados.total_contratos|brl }}</td>
+            <td></td>
+            <td></td>
+            <td class="text-end">{{ dados.total_iss|brl }}</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      <i class="bi bi-receipt" style="font-size:2.5rem;opacity:.2"></i>
+      <p class="mt-2">Nenhum contrato encontrado para os filtros selecionados.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Rodapé resumo -->
+<div class="row g-2 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="text-center p-3 rounded" style="background:var(--cm-bg);border:1px solid var(--cm-accent)">
+      <div class="text-muted small">ISS total gerado</div>
+      <div class="fw-bold" style="color:#0c447c;font-size:1.1rem">{{ dados.total_iss|brl }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="text-center p-3 rounded" style="background:#d4edda;border:1px solid #c3e6cb">
+      <div class="text-muted small">Já pago</div>
+      <div class="fw-bold" style="color:#155724;font-size:1.1rem">{{ dados.total_iss_pago|brl }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="text-center p-3 rounded" style="background:#fff3cd;border:1px solid #ffeeba">
+      <div class="text-muted small">Obrigação real</div>
+      <div class="fw-bold" style="color:#856404;font-size:1.1rem">{{ dados.total_iss_a_pagar|brl }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="text-center p-3 rounded" style="background:#fde8d8;border:1px solid #f5c6a0">
+      <div class="text-muted small">Provisão futura</div>
+      <div class="fw-bold" style="color:#854F0B;font-size:1.1rem">{{ dados.total_iss_estimado|brl }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="text-muted small mb-4">* ISS estimado = 6% sobre contratos sem NF emitida. É uma provisão — o valor real pode variar conforme a NF for emitida.</div>
+
+<!-- Rodapé -->
+<div class="text-center text-muted mt-2 pb-2" style="font-size:.75rem;border-top:1px solid var(--cm-accent);padding-top:.5rem">
+  {{ marca.nome }} · Relatório gerado automaticamente pelo sistema em {{ hoje|data_br }}
+</div>
+
+{% endif %}
+{% endblock %}

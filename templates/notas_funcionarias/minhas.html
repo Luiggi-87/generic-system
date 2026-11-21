@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}Minhas Notas Fiscais — {{ marca.nome }}{% endblock %}
+{% block page_title %}Minhas Notas Fiscais{% endblock %}
+
+{% macro status(v) %}
+  {% if v == 'paga' %}<span class="badge bg-success">Paga</span>
+  {% elif v == 'conferida' %}<span class="badge bg-primary">Conferida — aguardando pagamento</span>
+  {% elif v == 'divergente' %}<span class="badge bg-warning text-dark">Valor não confere</span>
+  {% else %}<span class="badge bg-secondary">Sem repasse neste mês</span>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="alert alert-info small py-2">
+  <i class="bi bi-info-circle me-1"></i>O pagamento do repasse é feito mediante <strong>nota fiscal</strong> emitida para a empresa.
+  Envie aqui o <strong>XML</strong> da nota: o sistema confere se o valor bate com o seu repasse e avisa a empresa.
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-file-earmark-arrow-up me-1"></i>Enviar nota fiscal — {{ f.nome }}</div>
+  <div class="card-body">
+    {% if opcoes %}
+    <form method="post" action="{{ url_for('notas_func.enviar') }}" enctype="multipart/form-data" class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label small fw-bold">Nota referente ao repasse de</label>
+        <select name="referencia" id="ref" class="form-select" required>
+          {% for o in opcoes %}<option value="{{ o.ano }}-{{ '%02d'|format(o.mes) }}" data-valor="{{ '%.2f'|format(o.valor) }}">{{ o.nome }}</option>{% endfor %}
+        </select>
+        <div class="form-text">Valor do seu repasse neste mês: <strong id="valor-ref"></strong> — emita a nota exatamente com este valor.</div>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small fw-bold">Arquivo XML da nota *</label>
+        <input type="file" name="arquivo" accept=".xml,text/xml,application/xml" class="form-control" required>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100"><i class="bi bi-upload me-1"></i>Enviar</button>
+      </div>
+    </form>
+    <script>
+    (function () {
+      var sel = document.getElementById('ref'), out = document.getElementById('valor-ref');
+      function atualiza() {
+        var v = parseFloat(sel.options[sel.selectedIndex].dataset.valor);
+        out.textContent = 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+      }
+      sel.addEventListener('change', atualiza); atualiza();
+    })();
+    </script>
+    {% else %}
+    <div class="text-muted">Não há repasse seu pendente de nota fiscal nos últimos meses.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Notas enviadas</div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Repasse de</th><th>Nº da nota</th><th>Emissão</th><th class="text-end">Valor da nota</th><th class="text-end">Seu repasse</th><th>Situação</th><th></th></tr></thead>
+      <tbody>
+        {% for i in itens %}{% set n = i.nota %}
+        <tr>
+          <td>{{ '%02d'|format(n.mes) }}/{{ n.ano }}</td>
+          <td>{{ n.numero }}</td>
+          <td>{{ n.data_emissao|data_br }}</td>
+          <td class="text-end">{{ n.valor|brl }}</td>
+          <td class="text-end">{{ i.esperado|brl if i.esperado is not none else '—' }}</td>
+          <td>{{ status(i.veredito) }}{% if n.pago_em %}<div class="small text-muted">pago em {{ n.pago_em|data_br }}</div>{% endif %}</td>
+          <td class="text-end"><a href="{{ url_for('notas_func.baixar_xml', id=n.id) }}" class="btn btn-sm btn-outline-secondary" title="Baixar XML"><i class="bi bi-download"></i></a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-3">Nenhuma nota enviada ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

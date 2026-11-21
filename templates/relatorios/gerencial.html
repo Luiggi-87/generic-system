@@ -1,0 +1,876 @@
+{% extends 'base.html' %}
+{% block title %}Relatório Gerencial — {{ marca.nome }}{% endblock %}
+{% block page_title %}Relatório Gerencial{% endblock %}
+
+{% block extra_head %}
+<style>
+@media print {
+  #sidebar, #topbar, #btn-toggle-sidebar, #sidebar-overlay,
+  .no-print { display: none !important; }
+  #main { margin-left: 0 !important; }
+  .content-area { padding: 0 !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  body { background: #fff !important; }
+}
+.saldo-row { display:flex; justify-content:space-between; align-items:baseline;
+             padding: 6px 0; border-bottom: 1px solid var(--cm-bg); font-size:.9rem; }
+.saldo-row:last-child { border-bottom: none; }
+.saldo-sub { display:flex; justify-content:space-between; font-size:.82rem;
+             color:#666; padding: 2px 0 2px 18px; }
+.saldo-total { display:flex; justify-content:space-between; align-items:baseline;
+               padding: 10px 0 0; border-top: 2px solid var(--cm-primary);
+               font-size:1.05rem; font-weight:600; margin-top:4px; }
+.val-pos { color:#1b5e20; font-weight:600; }
+.val-neg { color:#b71c1c; font-weight:600; }
+.val-amber { color:#7b4400; font-weight:600; }
+.val-blue { color:#0c447c; font-weight:700; }
+.dot-green  { width:9px;height:9px;border-radius:50%;background:#388e3c;display:inline-block;margin-right:7px;flex-shrink:0; }
+.dot-red    { width:9px;height:9px;border-radius:50%;background:#c62828;display:inline-block;margin-right:7px;flex-shrink:0; }
+.dot-amber  { width:9px;height:9px;border-radius:50%;background:#e65100;display:inline-block;margin-right:7px;flex-shrink:0; }
+.dot-orange { width:9px;height:9px;border-radius:50%;background:#bf360c;display:inline-block;margin-right:7px;flex-shrink:0; }
+.dot-gray   { width:9px;height:9px;border-radius:50%;background:#9e9e9e;display:inline-block;margin-right:7px;flex-shrink:0; }
+.tag-iss { font-size:.72rem;padding:1px 6px;border-radius:4px;font-weight:600;margin-left:6px;vertical-align:middle; }
+.tag-pago    { background:#d4edda;color:#155724; }
+.tag-apagar  { background:#fff3cd;color:#856404; }
+.tag-futuro  { background:#fde8d8;color:#854F0B; }
+.prog-bar-iss { height:9px;border-radius:5px;overflow:hidden;display:flex;background:var(--cm-bg); }
+.prog-pago   { background:#388e3c; }
+.prog-apagar { background:#f0ad4e; }
+.prog-fut    { background:#e65100; }
+.row-pago    { background:#f6fbf6; }
+.row-apagar  { background:#fffdf0; }
+.row-semNF   { background:#fff8f0; }
+.pill-section { display:inline-block;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:20px;margin-right:6px; }
+.kpi-mini { background:var(--cm-bg); border-radius:.5rem; padding:.75rem 1rem; }
+.kpi-mini .lbl { font-size:.72rem; font-weight:700; letter-spacing:.05em; color:#888; text-transform:uppercase; }
+.kpi-mini .val { font-size:1.4rem; font-weight:700; line-height:1.2; }
+.kpi-mini .sub { font-size:.75rem; color:#999; margin-top:2px; }
+.assinatura-line { border-bottom:1px solid #999; min-width:220px; display:inline-block; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Seletor de parâmetros -->
+<div class="card mb-3 no-print">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="gerar" value="1">
+      <div class="col-auto">
+        <label class="form-label small fw-bold mb-1">Mês</label>
+        <select name="mes" class="form-select form-select-sm" style="min-width:120px">
+          {% for i in range(1, 13) %}
+          <option value="{{ i }}" {% if i == mes %}selected{% endif %}>{{ meses_nomes[i-1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-bold mb-1">Ano</label>
+        <select name="ano" class="form-select form-select-sm" style="min-width:90px">
+          {% for y in range(hoje.year - 2, hoje.year + 2) %}
+          <option value="{{ y }}" {% if y == ano %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-bold mb-1">Tipo</label>
+        <select name="tipo" class="form-select form-select-sm">
+          <option value="sintetico" {% if tipo == 'sintetico' %}selected{% endif %}>Sintético</option>
+          <option value="analitico" {% if tipo == 'analitico' %}selected{% endif %}>Analítico</option>
+          <option value="acumulado" {% if tipo == 'acumulado' %}selected{% endif %}>Acumulado</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-bold mb-1">Escopo</label>
+        <select name="escopo" class="form-select form-select-sm" id="sel-escopo" onchange="toggleFuncionaria()">
+          <option value="geral" {% if escopo == 'geral' %}selected{% endif %}>Geral (todas)</option>
+          <option value="individual" {% if escopo == 'individual' %}selected{% endif %}>Por prestadora de serviço</option>
+        </select>
+      </div>
+      <div class="col-auto" id="div-funcionaria" style="display:{% if escopo == 'individual' %}block{% else %}none{% endif %}">
+        <label class="form-label small fw-bold mb-1">Prestadora de serviço</label>
+        <select name="funcionario_id" class="form-select form-select-sm" style="min-width:180px">
+          <option value="">— Selecione —</option>
+          {% for f in funcionarios %}
+          <option value="{{ f.id }}" {% if f.id == funcionario_id %}selected{% endif %}>{{ f.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-bar-chart-fill me-1"></i>Gerar relatório
+        </button>
+      </div>
+      {% if dados %}
+      <div class="col-auto">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i>Imprimir / PDF
+        </button>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% if not dados %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-bar-chart-line" style="font-size:3rem;opacity:.2"></i>
+  <p class="mt-2">Selecione os parâmetros e clique em <strong>Gerar relatório</strong>.</p>
+</div>
+
+{% else %}
+
+<!-- Cabeçalho do relatório -->
+<div class="mb-3" style="border-bottom:2px solid var(--cm-primary);padding-bottom:.75rem">
+  <div style="color:var(--cm-primary);font-size:.8rem;font-weight:700">♥ {{ marca.nome }}</div>
+  <div class="fw-bold" style="font-size:1.3rem">
+    Relatório Gerencial —
+    {% if escopo == 'individual' and funcionario_sel %}
+      {{ funcionario_sel.nome }} —
+    {% endif %}
+    {{ dados.mes_nome }}/{{ dados.ano }}
+  </div>
+  <div class="text-muted small">
+    Período: {{ dados.inicio|data_br }} a {{ dados.fim|data_br }} ·
+    Gerado em {{ hoje|data_br }} ·
+    {% if tipo == 'analitico' %}Analítico{% elif tipo == 'acumulado' %}Acumulado{% else %}Sintético{% endif %} ·
+    {% if escopo == 'individual' and funcionario_sel %}Individual · {{ funcionario_sel.nome }}{% else %}Geral{% endif %} ·
+    Confidencial
+  </div>
+</div>
+
+{% if escopo == 'geral' %}
+
+{% if tipo == 'acumulado' %}
+<!-- ════════════════════════════════════════════
+     TIPO ACUMULADO
+════════════════════════════════════════════ -->
+
+<!-- ① ACUMULADO -->
+<div class="section-title">
+  <span class="pill-section" style="background:#d4edda;color:#155724">① Acumulado</span>
+  Janeiro–{{ dados.mes_nome }}/{{ dados.ano }}
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini" style="background:#d4edda">
+      <div class="lbl" style="color:#155724">Receitas acumuladas</div>
+      <div class="val" style="color:#1b5e20">{{ dados.total_rec_acum|brl }}</div>
+      <div class="sub">Histórico até {{ dados.fim|data_br }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini" style="background:#d4edda">
+      <div class="lbl" style="color:#155724">Despesas acumuladas</div>
+      <div class="val" style="color:#b71c1c">{{ dados.total_desp_acum|brl }}</div>
+      <div class="sub">Histórico até {{ dados.fim|data_br }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini" style="background:#d4edda">
+      <div class="lbl" style="color:#155724">Saldo em caixa</div>
+      <div class="val" style="color:#1b5e20">{{ dados.saldo_caixa_acumulado|brl }}</div>
+      <div class="sub">Antes de provisões</div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Apuração do saldo real disponível</div>
+  <div class="card-body">
+    <div class="border rounded p-3" style="background:#fafafa">
+
+      <div class="saldo-row">
+        <span><span class="dot-green"></span>Total recebido (acumulado)</span>
+        <span class="val-pos">+ {{ dados.total_rec_acum|brl }}</span>
+      </div>
+      <div class="saldo-row">
+        <span><span class="dot-red"></span>Total despesas pagas (acumulado)</span>
+        <span class="val-neg">− {{ dados.total_desp_acum|brl }}</span>
+      </div>
+      <div class="saldo-row" style="background:#f0f8f0;font-size:.85rem;color:#555">
+        <span style="padding-left:14px">= Saldo bruto em caixa</span>
+        <span style="color:#185FA5;font-weight:600">{{ dados.saldo_caixa_acumulado|brl }}</span>
+      </div>
+
+      {% if dados.iss_pago_itens %}
+      <div class="saldo-row" style="color:#888">
+        <span><span class="dot-gray"></span>ISS já pago — NFs quitadas
+          <span class="tag-iss tag-pago">já deduzido</span>
+        </span>
+        <span style="color:#888">{{ dados.total_iss_pago|brl }}</span>
+      </div>
+      {% for item in dados.iss_pago_itens %}
+      <div class="saldo-sub" style="color:#aaa">
+        <span>{{ item.numero }} · {{ item.cliente }}</span>
+        <span>{{ item.iss|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if dados.iss_a_pagar_itens %}
+      <div class="saldo-row">
+        <span><span class="dot-amber"></span>ISS a pagar — NF emitida, imposto pendente
+          <span class="tag-iss tag-apagar">obrigação real</span>
+        </span>
+        <span class="val-amber">− {{ dados.total_iss_a_pagar|brl }}</span>
+      </div>
+      {% for item in dados.iss_a_pagar_itens %}
+      <div class="saldo-sub">
+        <span>{{ item.numero }} · {{ item.cliente }}</span>
+        <span class="val-amber">− {{ item.iss|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if dados.iss_estimado_itens %}
+      <div class="saldo-row" style="background:#fff8f0">
+        <span><span class="dot-orange"></span>ISS estimado — serviços sem nota emitida
+          <span class="tag-iss tag-futuro">despesa futura</span>
+        </span>
+        <span class="val-neg">− {{ dados.total_iss_estimado|brl }}</span>
+      </div>
+      {% for item in dados.iss_estimado_itens %}
+      <div class="saldo-sub" style="background:#fff8f0">
+        <span>{{ item.cliente }} · {{ item.valor|brl }} × 6%</span>
+        <span class="val-neg">− {{ item.iss|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if dados.repasses_a_pagar_itens %}
+      <div class="saldo-row" style="background:#fff8f0">
+        <span><span class="dot-orange"></span>Repasses às prestadoras — a pagar depois de {{ dados.fim|data_br }}
+          <span class="tag-iss tag-futuro">dívida do período</span>
+        </span>
+        <span class="val-neg">− {{ dados.total_repasses_a_pagar|brl }}</span>
+      </div>
+      {% for item in dados.repasses_a_pagar_itens %}
+      <div class="saldo-sub" style="background:#fff8f0">
+        <span>{% if item.pagamento %}Folha {{ item.competencia }} · pagamento em {{ item.pagamento|data_br }}{% else %}Partos de {{ item.competencia }} lançados depois do fechamento da folha · complemento na folha seguinte (estimativa){% endif %}</span>
+        <span class="val-neg">− {{ item.valor|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <div class="saldo-total">
+        <span>Saldo real disponível</span>
+        <span class="val-blue" style="font-size:1.15rem">{{ dados.saldo_real|brl }}</span>
+      </div>
+      {% if dados.adiantamentos %}
+      <div class="saldo-row" style="background:#f3e5f5">
+        <span><span class="dot-orange"></span>Adiantamentos de partos futuros — já recebidos, a repassar
+          <span class="tag-iss tag-futuro">dinheiro de terceiros</span>
+        </span>
+        <span class="val-neg">− {{ dados.adiantamentos|brl }}</span>
+      </div>
+      <div class="saldo-total" style="background:#e8f5e9">
+        <span>Saldo livre da empresa (sem os adiantamentos)</span>
+        <span class="val-blue" style="font-size:1.15rem">{{ dados.saldo_livre|brl }}</span>
+      </div>
+      {% endif %}
+    </div>
+    <div class="text-muted mt-2" style="font-size:.75rem">
+      * ISS estimado é uma provisão (6% sobre serviços sem NF emitida) — o valor real pode variar.
+    </div>
+  </div>
+</div>
+
+<!-- ② CONTRATOS × NF -->
+<div class="section-title mt-2">
+  <span class="pill-section" style="background:#e8e6fd;color:#3C3489">② Contratos × Notas Fiscais</span>
+</div>
+
+{% set total_iss_geral = dados.total_iss_pago + dados.total_iss_a_pagar + dados.total_iss_estimado %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#e8e6fd">
+      <div class="lbl" style="color:#3C3489">Total contratos</div>
+      <div class="val" style="color:#26215C">{{ dados.total_rec_acum|brl }}</div>
+      <div class="sub">Base para emissão de NF</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#d4edda">
+      <div class="lbl" style="color:#155724">ISS pago</div>
+      <div class="val" style="color:#1b5e20">{{ dados.total_iss_pago|brl }}</div>
+      <div class="sub">{{ dados.iss_pago_itens|length }} NF(s) quitadas</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#fff3cd">
+      <div class="lbl" style="color:#856404">ISS a pagar</div>
+      <div class="val" style="color:#664d03">{{ dados.total_iss_a_pagar|brl }}</div>
+      <div class="sub">{{ dados.iss_a_pagar_itens|length }} NF(s) emitidas pendentes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="kpi-mini" style="background:#fde8d8">
+      <div class="lbl" style="color:#854F0B">ISS estimado</div>
+      <div class="val" style="color:#633806">{{ dados.total_iss_estimado|brl }}</div>
+      <div class="sub">{{ dados.sem_nf_acum|length }} serviço(s) sem NF</div>
+    </div>
+  </div>
+</div>
+
+{% if total_iss_geral > 0 %}
+<div class="card mb-3">
+  <div class="card-header">Composição do ISS total — {{ total_iss_geral|brl }}</div>
+  <div class="card-body py-2">
+    {% set pct_pago = (dados.total_iss_pago / total_iss_geral * 100)|int %}
+    {% set pct_apagar = (dados.total_iss_a_pagar / total_iss_geral * 100)|int %}
+    {% set pct_est = 100 - pct_pago - pct_apagar %}
+    <div class="d-flex justify-content-between" style="font-size:.75rem;margin-bottom:5px">
+      <span style="color:#1b5e20;font-weight:600">Pago {{ pct_pago }}%</span>
+      <span style="color:#856404;font-weight:600">A pagar {{ pct_apagar }}%</span>
+      <span style="color:#854F0B;font-weight:600">Estimado {{ pct_est }}%</span>
+    </div>
+    <div class="prog-bar-iss">
+      <div class="prog-pago" style="width:{{ pct_pago }}%"></div>
+      <div class="prog-apagar" style="width:{{ pct_apagar }}%"></div>
+      <div class="prog-fut" style="width:{{ pct_est }}%"></div>
+    </div>
+    <div class="d-flex gap-3 mt-2" style="font-size:.72rem;color:#888">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#388e3c;margin-right:3px"></span>Pago</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#f0ad4e;margin-right:3px"></span>NF emitida, ISS pendente</span>
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#e65100;margin-right:3px"></span>Sem NF — estimado</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Detalhamento por cliente</span>
+    <div class="d-flex gap-1">
+      <span class="badge" style="background:#d4edda;color:#155724;font-size:.72rem">{{ dados.iss_pago_itens|length }} pago(s)</span>
+      <span class="badge" style="background:#fff3cd;color:#856404;font-size:.72rem">{{ dados.iss_a_pagar_itens|length }} a pagar</span>
+      <span class="badge" style="background:#fde8d8;color:#854F0B;font-size:.72rem">{{ dados.sem_nf_acum|length }} sem NF</span>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>NF</th>
+            <th class="text-end">Valor NF</th>
+            <th class="text-end">ISS (6%)</th>
+            <th>Status NF</th>
+            <th>Status ISS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in dados.iss_pago_itens %}
+          <tr class="row-pago">
+            <td class="fw-semibold">{{ item.cliente }}</td>
+            <td><span class="badge" style="background:#cce5ff;color:#004085;font-size:.72rem">{{ item.numero }}</span></td>
+            <td class="text-end text-positivo">—</td>
+            <td class="text-end" style="color:#1b5e20;font-weight:600">{{ item.iss|brl }}</td>
+            <td><span class="badge" style="background:#cce5ff;color:#004085;font-size:.72rem">Emitida</span></td>
+            <td><span class="badge" style="background:#d4edda;color:#155724;font-size:.72rem">Pago</span></td>
+          </tr>
+          {% endfor %}
+          {% for item in dados.iss_a_pagar_itens %}
+          <tr class="row-apagar">
+            <td class="fw-semibold">{{ item.cliente }}</td>
+            <td><span class="badge" style="background:#cce5ff;color:#004085;font-size:.72rem">{{ item.numero }}</span></td>
+            <td class="text-end text-positivo">—</td>
+            <td class="text-end" style="color:#856404;font-weight:600">{{ item.iss|brl }}</td>
+            <td><span class="badge" style="background:#cce5ff;color:#004085;font-size:.72rem">Emitida</span></td>
+            <td><span class="badge" style="background:#fff3cd;color:#856404;font-size:.72rem">A pagar</span></td>
+          </tr>
+          {% endfor %}
+          {% for l in dados.sem_nf_acum %}
+          <tr class="row-semNF">
+            <td class="fw-semibold">{{ l.cliente.nome }}</td>
+            <td><span class="text-muted small">—</span></td>
+            <td class="text-end text-muted">—</td>
+            <td class="text-end" style="color:#854F0B;font-weight:600">{{ (l.valor * 0.06)|round(2)|brl }} *</td>
+            <td><span class="badge" style="background:#fde8d8;color:#854F0B;font-size:.72rem">Sem NF</span></td>
+            <td><span class="badge" style="background:#fde8d8;color:#854F0B;font-size:.72rem">Estimado</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="fw-bold">
+            <td>Total</td>
+            <td></td>
+            <td></td>
+            <td class="text-end">{{ total_iss_geral|brl }}</td>
+            <td></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="text-muted px-3 py-2" style="font-size:.75rem">* ISS estimado sobre serviços sem NF emitida — provisão de 6%.</div>
+  </div>
+</div>
+
+<!-- ③ CAIXA DO MÊS -->
+<div class="section-title mt-2">
+  <span class="pill-section" style="background:#cce5ff;color:#004085">③ Caixa do mês</span>
+  {{ dados.mes_nome }}/{{ dados.ano }}
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini" style="background:#cce5ff">
+      <div class="lbl" style="color:#004085">Receitas do mês</div>
+      <div class="val" style="color:#1b5e20">{{ dados.total_receitas|brl }}</div>
+      <div class="sub">{{ dados.lancamentos_receita|length }} recebimento(s)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini" style="background:#cce5ff">
+      <div class="lbl" style="color:#004085">Despesas do mês</div>
+      <div class="val" style="color:#b71c1c">{{ dados.total_despesas|brl }}</div>
+      <div class="sub">Despesas pagas em {{ dados.mes_nome }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini" style="background:#cce5ff">
+      <div class="lbl" style="color:#004085">Resultado do mês</div>
+      <div class="val" style="color:#0c447c">{{ (dados.total_receitas - dados.total_despesas)|brl }}</div>
+      <div class="sub">Receitas − despesas {{ dados.mes_nome }}</div>
+    </div>
+  </div>
+</div>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="border rounded p-3" style="background:#fafafa">
+      <div class="saldo-row">
+        <span><span class="dot-green"></span>Receitas recebidas em {{ dados.mes_nome }}</span>
+        <span class="val-pos">+ {{ dados.total_receitas|brl }}</span>
+      </div>
+      <div class="saldo-row">
+        <span><span class="dot-red"></span>Despesas pagas em {{ dados.mes_nome }}</span>
+        <span class="val-neg">− {{ dados.total_despesas|brl }}</span>
+      </div>
+      <div class="saldo-total">
+        <span>Resultado do mês</span>
+        <span style="color:#0c447c;font-size:1.15rem;font-weight:700">{{ (dados.total_receitas - dados.total_despesas)|brl }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% else %}{# sintetico / analitico #}
+
+<!-- ════════════════════════════════════════════
+     RESUMO FINANCEIRO — KPIs
+════════════════════════════════════════════ -->
+<div class="section-title">Resumo financeiro</div>
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini">
+      <div class="lbl">Saldo em caixa</div>
+      <div class="val" style="color:#0c447c">{{ dados.saldo_caixa_acumulado|brl }}</div>
+      <div class="sub">Acumulado histórico até {{ dados.fim|data_br }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini">
+      <div class="lbl">Receitas do período</div>
+      <div class="val" style="color:#1b5e20">{{ dados.total_receitas|brl }}</div>
+      <div class="sub">{{ dados.lancamentos_receita|length }} recebimento(s)</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini">
+      <div class="lbl">Despesas do período</div>
+      <div class="val" style="color:#b71c1c">{{ dados.total_despesas|brl }}</div>
+      <div class="sub">Folha + impostos + outros</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini">
+      <div class="lbl">Notas fiscais emitidas</div>
+      <div class="val" style="color:#0c447c">{{ dados.total_nf_bruto|brl }}</div>
+      <div class="sub">{{ dados.notas|length }} nota(s) · ISS: {{ dados.total_iss_emitido|brl }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini">
+      <div class="lbl">Recebimentos sem NF</div>
+      <div class="val" style="color:#b71c1c">{{ dados.total_sem_nf|brl }}</div>
+      <div class="sub">{{ dados.sem_nf|length }} cliente(s) · NF não emitida</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4">
+    <div class="kpi-mini">
+      <div class="lbl">Pagamento prestadoras de serviço</div>
+      <div class="val" style="color:#7b4400">{{ dados.total_folha_liquido|brl }}</div>
+      <div class="sub">{{ dados.folha_resultados|length }} prestadora de serviço(s)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Receitas por categoria -->
+<div class="card mb-3">
+  <div class="card-header">Receitas por categoria</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Categoria</th>
+          <th class="text-center">Qtd</th>
+          <th class="text-end">Valor</th>
+          <th class="text-end">% do total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for nome_cc, info in dados.rec_por_cc.items() %}
+        <tr>
+          <td>{{ nome_cc }}</td>
+          <td class="text-center">{{ info.qtd }}</td>
+          <td class="text-end text-positivo">{{ info.valor|brl }}</td>
+          <td class="text-end text-muted small">
+            {% if dados.total_receitas > 0 %}{{ "%.0f"|format(info.valor / dados.total_receitas * 100) }}%{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-3">Nenhuma receita no período.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if dados.rec_por_cc %}
+      <tfoot>
+        <tr class="fw-bold">
+          <td>Total</td>
+          <td class="text-center">{{ dados.lancamentos_receita|length }}</td>
+          <td class="text-end text-positivo">{{ dados.total_receitas|brl }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+{% if tipo == 'analitico' %}
+<!-- Analítico: lançamentos de receita detalhados -->
+<div class="card mb-3">
+  <div class="card-header">Receitas — detalhamento</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Data</th><th>Descrição</th><th>Cliente</th>
+            <th>Forma</th><th class="text-end">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in dados.lancamentos_receita %}
+          <tr>
+            <td class="text-muted small">{{ l.data_pagamento|data_br }}</td>
+            <td>{{ l.descricao }}</td>
+            <td class="text-muted small">{{ l.cliente.nome if l.cliente else '—' }}</td>
+            <td><span class="badge bg-secondary" style="font-size:.72rem">
+              {{ formas_nomes.get(l.forma_pagamento, l.forma_pagamento) or '—' }}
+            </span></td>
+            <td class="text-end text-positivo">{{ l.valor|brl }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="fw-bold">
+            <td colspan="4">Total</td>
+            <td class="text-end text-positivo">{{ dados.total_receitas|brl }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Despesas por centro de custo -->
+<div class="card mb-3">
+  <div class="card-header">Despesas por centro de custo</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Centro de custo</th>
+          <th class="text-end">Valor</th>
+          <th class="text-end">% do total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for nome_cc, valor in dados.desp_por_cc.items() %}
+        <tr>
+          <td>{{ nome_cc }}</td>
+          <td class="text-end text-negativo">{{ valor|brl }}</td>
+          <td class="text-end text-muted small">
+            {% if dados.total_despesas > 0 %}{{ "%.0f"|format(valor / dados.total_despesas * 100) }}%{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted py-3">Nenhuma despesa no período.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if dados.desp_por_cc %}
+      <tfoot>
+        <tr class="fw-bold">
+          <td>Total</td>
+          <td class="text-end text-negativo">{{ dados.total_despesas|brl }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+{% if tipo == 'analitico' %}
+<!-- Analítico: lançamentos de despesa detalhados -->
+<div class="card mb-3">
+  <div class="card-header">Despesas — detalhamento</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Data</th><th>Descrição</th><th>Centro de custo</th><th class="text-end">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in dados.lancamentos_despesa %}
+          <tr>
+            <td class="text-muted small">{{ l.data_pagamento|data_br }}</td>
+            <td>{{ l.descricao }}</td>
+            <td class="text-muted small">{{ l.centro_custo.nome if l.centro_custo else '—' }}</td>
+            <td class="text-end text-negativo">{{ l.valor|brl }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Pagamento por prestadora de serviço -->
+<div class="card mb-3">
+  <div class="card-header">Pagamento por prestadora de serviço</div>
+  <div class="card-body p-0">
+    {% if dados.folha_resultados %}
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Prestadora de serviço</th>
+          <th class="text-end">Bruto</th>
+          <th class="text-end">Desconto</th>
+          <th class="text-end">Líquido</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in dados.folha_resultados %}
+        <tr>
+          <td>{{ r.funcionario.nome }}</td>
+          <td class="text-end">{{ r.bruto|brl }}</td>
+          <td class="text-end text-negativo">{{ r.desc_val|brl }}</td>
+          <td class="text-end" style="color:#0c447c;font-weight:600">{{ r.liquido|brl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="fw-bold">
+          <td>Total</td>
+          <td class="text-end">{{ dados.total_folha_bruto|brl }}</td>
+          <td class="text-end text-negativo">{{ dados.total_folha_desconto|brl }}</td>
+          <td class="text-end" style="color:#0c447c">{{ dados.total_folha_liquido|brl }}</td>
+        </tr>
+      </tfoot>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-3">
+      Nenhuma folha de pagamento registrada para {{ dados.mes_nome }}/{{ dados.ano }}.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     APURAÇÃO DO SALDO REAL EM CAIXA
+════════════════════════════════════════════ -->
+<div class="section-title mt-3">Apuração do saldo real em caixa</div>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="border rounded p-3" style="background:#fafafa">
+
+      <!-- Saldo acumulado em caixa -->
+      <div class="saldo-row">
+        <span><span class="dot-green"></span>Saldo em caixa (acumulado até {{ dados.fim|data_br }})</span>
+        <span class="val-pos">{{ dados.saldo_caixa_acumulado|brl }}</span>
+      </div>
+      <div class="saldo-sub">
+        <span>Total recebido (histórico)</span>
+        <span class="val-pos">+ {{ dados.total_rec_acum|brl }}</span>
+      </div>
+      <div class="saldo-sub">
+        <span>Total despesas pagas (histórico)</span>
+        <span class="val-neg">− {{ dados.total_desp_acum|brl }}</span>
+      </div>
+
+      <!-- ISS a pagar — notas emitidas -->
+      {% if dados.iss_a_pagar_itens %}
+      <div class="saldo-row" style="margin-top:4px">
+        <span><span class="dot-amber"></span>ISS a pagar — notas já emitidas</span>
+        <span class="val-amber">− {{ dados.total_iss_a_pagar|brl }}</span>
+      </div>
+      {% for item in dados.iss_a_pagar_itens %}
+      <div class="saldo-sub">
+        <span>{{ item.numero }} · {{ item.cliente }}</span>
+        <span class="val-amber">− {{ item.iss|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <!-- ISS estimado — sem NF -->
+      {% if dados.iss_estimado_itens %}
+      <div class="saldo-row" style="margin-top:4px">
+        <span><span class="dot-amber"></span>ISS estimado — notas ainda não emitidas (6%)</span>
+        <span class="val-amber">− {{ dados.total_iss_estimado|brl }}</span>
+      </div>
+      {% for item in dados.iss_estimado_itens %}
+      <div class="saldo-sub">
+        <span>{{ item.cliente }} · {{ item.valor|brl }}</span>
+        <span class="val-amber">− {{ item.iss|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <!-- Saldo real -->
+      {% if dados.repasses_a_pagar_itens %}
+      <div class="saldo-row" style="background:#fff8f0">
+        <span><span class="dot-orange"></span>Repasses às prestadoras — a pagar depois de {{ dados.fim|data_br }}
+          <span class="tag-iss tag-futuro">dívida do período</span>
+        </span>
+        <span class="val-neg">− {{ dados.total_repasses_a_pagar|brl }}</span>
+      </div>
+      {% for item in dados.repasses_a_pagar_itens %}
+      <div class="saldo-sub" style="background:#fff8f0">
+        <span>{% if item.pagamento %}Folha {{ item.competencia }} · pagamento em {{ item.pagamento|data_br }}{% else %}Partos de {{ item.competencia }} lançados depois do fechamento da folha · complemento na folha seguinte (estimativa){% endif %}</span>
+        <span class="val-neg">− {{ item.valor|brl }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <div class="saldo-total">
+        <span>Saldo real disponível</span>
+        <span class="val-blue" style="font-size:1.15rem">{{ dados.saldo_real|brl }}</span>
+      </div>
+      {% if dados.adiantamentos %}
+      <div class="saldo-row" style="background:#f3e5f5">
+        <span><span class="dot-orange"></span>Adiantamentos de partos futuros — já recebidos, a repassar
+          <span class="tag-iss tag-futuro">dinheiro de terceiros</span>
+        </span>
+        <span class="val-neg">− {{ dados.adiantamentos|brl }}</span>
+      </div>
+      <div class="saldo-total" style="background:#e8f5e9">
+        <span>Saldo livre da empresa (sem os adiantamentos)</span>
+        <span class="val-blue" style="font-size:1.15rem">{{ dados.saldo_livre|brl }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% if dados.iss_estimado_itens %}
+    <div class="text-muted mt-2" style="font-size:.78rem">
+      * ISS estimado sobre NFs não emitidas é uma provisão — o valor real pode variar.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endif %}{# fim tipo acumulado #}
+
+{% endif %}{# fim escopo == geral #}
+
+<!-- ════════════════════════════════════════════
+     COMPROVANTE INDIVIDUAL
+════════════════════════════════════════════ -->
+{% if escopo == 'individual' and funcionario_sel %}
+<div class="section-title">Comprovante de pagamento</div>
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>{{ funcionario_sel.nome }}</span>
+    <span class="badge" style="background:#e3f2fd;color:#0c447c">{{ dados.mes_nome }}/{{ dados.ano }}</span>
+  </div>
+  <div class="card-body p-0">
+    {% if dados.folha_resultados %}
+    <table class="table table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Descrição</th>
+          <th class="text-end">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in dados.folha_resultados %}
+        {% if r.bruto_rateado > 0 %}
+        <tr>
+          <td>Pagamento proporcional às horas trabalhadas</td>
+          <td class="text-end">{{ r.bruto_rateado|brl }}</td>
+        </tr>
+        {% endif %}
+        {% if r.bruto_direto > 0 %}
+        <tr>
+          <td>Receita direcionada diretamente</td>
+          <td class="text-end">{{ r.bruto_direto|brl }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td class="text-muted">Desconto ({{ "%.0f"|format(r.desc_pct * 100) }}%)</td>
+          <td class="text-end text-negativo">− {{ r.desc_val|brl }}</td>
+        </tr>
+        <tr class="fw-bold">
+          <td>Líquido a receber</td>
+          <td class="text-end" style="color:#0c447c">{{ r.liquido|brl }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-muted py-3">
+      Nenhuma folha registrada para {{ funcionario_sel.nome }} em {{ dados.mes_nome }}/{{ dados.ano }}.
+    </div>
+    {% endif %}
+  </div>
+  {% if dados.folha_resultados %}
+  <div class="card-footer" style="background:#fafafa">
+    <div class="d-flex justify-content-between align-items-end mt-2" style="font-size:.85rem;color:#555">
+      <div>
+        <div class="mb-4">Assinatura:</div>
+        <span class="assinatura-line" style="min-width:260px">&nbsp;</span>
+      </div>
+      <div class="text-end">
+        <div class="mb-4">Data:</div>
+        <span class="assinatura-line" style="min-width:140px">&nbsp;</span>
+      </div>
+    </div>
+    <div class="text-center text-muted mt-3" style="font-size:.72rem">
+      {{ marca.nome }} · Comprovante gerado automaticamente em {{ hoje|data_br }}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Rodapé do relatório -->
+<div class="text-center text-muted mt-4 pb-2" style="font-size:.75rem;border-top:1px solid var(--cm-accent);padding-top:.5rem">
+  {{ marca.nome }} · Relatório gerado automaticamente pelo sistema em {{ hoje|data_br }} · Página 1/1
+</div>
+
+{% endif %}{# fim if dados #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleFuncionaria() {
+  const escopo = document.getElementById('sel-escopo').value;
+  document.getElementById('div-funcionaria').style.display = escopo === 'individual' ? 'block' : 'none';
+}
+</script>
+{% endblock %}

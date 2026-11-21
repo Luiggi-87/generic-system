@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Prestadores de serviço — {{ marca.nome }}{% endblock %}
+{% block page_title %}Prestadores de serviço{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <a href="{{ url_for('folha.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Voltar à Folha
+  </a>
+  <a href="{{ url_for('folha.novo_funcionario') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-person-plus me-1"></i>Novo Prestador de serviço
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if funcionarios %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Nome</th><th>CPF</th><th>Cargo</th><th class="text-center">% Desconto</th><th class="text-center">Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for f in funcionarios %}
+          <tr>
+            <td class="fw-bold">{{ f.nome }}</td>
+            <td class="text-muted small">{{ f.cpf or '—' }}</td>
+            <td class="text-muted small">{{ f.cargo or '—' }}</td>
+            <td class="text-center">{{ (f.taxa_desconto * 100)|round(1) }}%</td>
+            <td class="text-center">
+              {% if f.ativo %}
+              <span class="badge bg-success">Ativo</span>
+              {% else %}
+              <span class="badge bg-secondary">Inativo</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ url_for('folha.editar_funcionario', fid=f.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-pencil"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-people" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhum prestador de serviço cadastrado.</p>
+      <a href="{{ url_for('folha.novo_funcionario') }}" class="btn btn-primary">Cadastrar Prestador de serviço</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

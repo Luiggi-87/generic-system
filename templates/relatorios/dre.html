@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% block title %}DRE — {{ marca.nome }}{% endblock %}
+{% block page_title %}Demonstrativo de Resultado (DRE){% endblock %}
+
+{% block content %}
+<!-- Filtro de período -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Data Inicial</label>
+        <input type="date" name="data_de" class="form-control" value="{{ data_de.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Data Final</label>
+        <input type="date" name="data_ate" class="form-control" value="{{ data_ate.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100"><i class="bi bi-filter me-1"></i>Aplicar</button>
+      </div>
+      <div class="col-md-4 text-muted small d-flex align-items-center">
+        Período: {{ data_de|data_br }} a {{ data_ate|data_br }}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Cards resumo -->
+<div class="row g-3 mb-4">
+  {# OCULTO — cards Regime de Competência (mantidos para uso futuro)
+  <div class="col-md-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#00695c,#004d40)">
+      <div class="label">Receitas — Competência</div>
+      <div class="value" style="font-size:1.3rem">{{ total_rec_comp|brl }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card" style="background:linear-gradient(135deg,#b71c1c,#7f0000)">
+      <div class="label">Despesas — Competência</div>
+      <div class="value" style="font-size:1.3rem">{{ total_desp_comp|brl }}</div>
+    </div>
+  </div>
+  #}
+  <div class="col-md-6">
+    <div class="stat-card" style="background:linear-gradient(135deg,#1565c0,#0d47a1)">
+      <div class="label">Receitas — Caixa</div>
+      <div class="value" style="font-size:1.3rem">{{ total_rec_caixa|brl }}</div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="stat-card" style="background:linear-gradient(135deg,#4a148c,#311b92)">
+      <div class="label">Despesas — Caixa</div>
+      <div class="value" style="font-size:1.3rem">{{ total_desp_caixa|brl }}</div>
+    </div>
+  </div>
+</div>
+
+{# OCULTO — aba Regime de Competência (mantida para uso futuro)
+<!-- Tabs Regime -->
+<ul class="nav nav-pills mb-3" id="regime-tab">
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-competencia">
+      <i class="bi bi-graph-up me-1"></i>Regime de Competência
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-caixa">
+      <i class="bi bi-cash-coin me-1"></i>Regime de Caixa
+    </button>
+  </li>
+</ul>
+#}
+
+<div class="tab-content">
+  <!-- COMPETÊNCIA — OCULTO (mantido para uso futuro) -->
+  <div class="tab-pane fade" id="tab-competencia">
+    <div class="card">
+      <div class="card-header fw-bold">DRE — Regime de Competência</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th style="min-width:220px">Centro de Custo</th>
+                {% for m in meses %}<th class="text-end">{{ m[5:] }}/{{ m[:4] }}</th>{% endfor %}
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="table-success">
+                <td colspan="{{ meses|length + 2 }}" class="fw-bold py-1 ps-2">RECEITAS</td>
+              </tr>
+              {% for centro, dados in rec_comp.items() %}
+              <tr>
+                <td class="ps-3 text-muted small">{{ centro }}</td>
+                {% for m in meses %}
+                <td class="text-end small">{{ dados.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end fw-bold text-positivo">{{ dados.values()|sum|brl }}</td>
+              </tr>
+              {% endfor %}
+              <tr class="fw-bold" style="background:#e8f5e9">
+                <td>Total Receitas</td>
+                {% for m in meses %}
+                <td class="text-end text-positivo">{{ totais_rec_comp.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end text-positivo">{{ total_rec_comp|brl }}</td>
+              </tr>
+
+              <tr class="table-danger">
+                <td colspan="{{ meses|length + 2 }}" class="fw-bold py-1 ps-2">DESPESAS</td>
+              </tr>
+              {% for centro, dados in desp_comp.items() %}
+              <tr>
+                <td class="ps-3 text-muted small">{{ centro }}</td>
+                {% for m in meses %}
+                <td class="text-end small">{{ dados.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end fw-bold text-negativo">{{ dados.values()|sum|brl }}</td>
+              </tr>
+              {% endfor %}
+              <tr class="fw-bold" style="background:#fdecea">
+                <td>Total Despesas</td>
+                {% for m in meses %}
+                <td class="text-end text-negativo">{{ totais_desp_comp.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end text-negativo">{{ total_desp_comp|brl }}</td>
+              </tr>
+
+              <tr class="fw-bold table-light" style="border-top:3px solid #ccc">
+                <td>RESULTADO LÍQUIDO</td>
+                {% for m in meses %}
+                {% set res = resultado_comp.get(m, 0) %}
+                <td class="text-end {{ 'text-positivo' if res >= 0 else 'text-negativo' }}">{{ res|brl }}</td>
+                {% endfor %}
+                {% set res_total = resultado_comp_total %}
+                <td class="text-end fs-6 {{ 'text-positivo' if res_total >= 0 else 'text-negativo' }}">{{ res_total|brl }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAIXA -->
+  <div class="tab-pane fade show active" id="tab-caixa">
+    <div class="card">
+      <div class="card-header fw-bold">DRE — Regime de Caixa</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th style="min-width:220px">Centro de Custo</th>
+                {% for m in meses %}<th class="text-end">{{ m[5:] }}/{{ m[:4] }}</th>{% endfor %}
+                <th class="text-end">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="table-success">
+                <td colspan="{{ meses|length + 2 }}" class="fw-bold py-1 ps-2">RECEITAS RECEBIDAS</td>
+              </tr>
+              {% for centro, dados in rec_caixa.items() %}
+              <tr>
+                <td class="ps-3 text-muted small">{{ centro }}</td>
+                {% for m in meses %}
+                <td class="text-end small">{{ dados.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end fw-bold text-positivo">{{ dados.values()|sum|brl }}</td>
+              </tr>
+              {% endfor %}
+              <tr class="fw-bold" style="background:#e8f5e9">
+                <td>Total Receitas</td>
+                {% for m in meses %}
+                <td class="text-end text-positivo">{{ totais_rec_caixa.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end text-positivo">{{ total_rec_caixa|brl }}</td>
+              </tr>
+
+              <tr class="table-danger">
+                <td colspan="{{ meses|length + 2 }}" class="fw-bold py-1 ps-2">DESPESAS PAGAS</td>
+              </tr>
+              {% for centro, dados in desp_caixa.items() %}
+              <tr>
+                <td class="ps-3 text-muted small">{{ centro }}</td>
+                {% for m in meses %}
+                <td class="text-end small">{{ dados.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end fw-bold text-negativo">{{ dados.values()|sum|brl }}</td>
+              </tr>
+              {% endfor %}
+              <tr class="fw-bold" style="background:#fdecea">
+                <td>Total Despesas</td>
+                {% for m in meses %}
+                <td class="text-end text-negativo">{{ totais_desp_caixa.get(m, 0)|brl }}</td>
+                {% endfor %}
+                <td class="text-end text-negativo">{{ total_desp_caixa|brl }}</td>
+              </tr>
+
+              <tr class="fw-bold table-light" style="border-top:3px solid #ccc">
+                <td>RESULTADO DE CAIXA</td>
+                {% for m in meses %}
+                {% set res = resultado_caixa.get(m, 0) %}
+                <td class="text-end {{ 'text-positivo' if res >= 0 else 'text-negativo' }}">{{ res|brl }}</td>
+                {% endfor %}
+                {% set res_total = resultado_caixa_total %}
+                <td class="text-end fs-6 {{ 'text-positivo' if res_total >= 0 else 'text-negativo' }}">{{ res_total|brl }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

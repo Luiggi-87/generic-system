@@ -1,0 +1,486 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar Cliente' if cliente else 'Nova Cliente' %}
+{% block title %}{{ titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% set fd = form_data %}
+{% set c  = cliente %}
+{% set lancamentos = lancamentos or [] %}
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" id="form-cliente">
+
+      <!-- ── DADOS PESSOAIS ────────────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-person-fill me-2"></i>Dados Pessoais</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label class="form-label">Nome Completo *</label>
+          <input type="text" name="nome" class="form-control" required
+            value="{{ fd.get('nome') or (c.nome if c) or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">CPF</label>
+          <input type="text" name="cpf" class="form-control" placeholder="000.000.000-00"
+            value="{{ fd.get('cpf') or (c.cpf if c) or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Data de Nascimento</label>
+          <input type="date" name="data_nascimento" class="form-control"
+            value="{{ fd.get('data_nascimento') or (c.data_nascimento.strftime('%Y-%m-%d') if c and c.data_nascimento) or '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Nome do Bebê</label>
+          <input type="text" name="nome_bebe" class="form-control"
+            value="{{ fd.get('nome_bebe') or (c.nome_bebe if c) or '' }}">
+        </div>
+      </div>
+
+<!-- ── ACOMPANHAMENTO OBSTÉTRICO ─────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-heart-pulse me-2"></i>Acompanhamento Obstétrico</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <label class="form-label">DPP</label>
+          <input type="date" name="data_prevista_parto" class="form-control"
+            value="{{ fd.get('data_prevista_parto') or (c.data_prevista_parto.strftime('%Y-%m-%d') if c and c.data_prevista_parto) or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Data do Parto (real)</label>
+          <input type="date" name="data_parto" class="form-control"
+            value="{{ fd.get('data_parto') or (c.data_parto.strftime('%Y-%m-%d') if c and c.data_parto) or '' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Tipo de Parto</label>
+          <select name="tipo_parto" class="form-select">
+            <option value="">— não informado —</option>
+            <option value="parto_normal"
+              {% if (fd.get('tipo_parto') or (c.tipo_parto if c)) == 'parto_normal' %}selected{% endif %}>
+              Parto Normal (PN)
+            </option>
+            <option value="parto_cesario"
+              {% if (fd.get('tipo_parto') or (c.tipo_parto if c)) == 'parto_cesario' %}selected{% endif %}>
+              Cesariana (PC)
+            </option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Status</label>
+          <select name="status" class="form-select">
+            <option value="ativa"
+              {% if (fd.get('status') or (c.status if c) or 'ativa') == 'ativa' %}selected{% endif %}>
+              Ativa (Gestante)
+            </option>
+            <option value="pos_parto"
+              {% if (fd.get('status') or (c.status if c)) == 'pos_parto' %}selected{% endif %}>
+              Puérpera
+</option>
+            <option value="inativa"
+              {% if (fd.get('status') or (c.status if c)) == 'inativa' %}selected{% endif %}>
+              Inativa
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- ── DADOS DO CONTRATO ──────────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-file-earmark-text me-2"></i>Dados do Contrato</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <label class="form-label">Médico pré-natalista</label>
+          <input type="text" name="medico_grupo" class="form-control"
+            value="{{ fd.get('medico_grupo') or (c.medico_grupo if c) or '' }}"
+            placeholder="Ex: Dra. Silva…">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Grupo de parto / Plantão</label>
+          <input type="text" name="grupo_parto" class="form-control"
+            value="{{ fd.get('grupo_parto') or (c.grupo_parto if c) or '' }}"
+            placeholder="Ex: GAIA, VITTA…">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Hospital do Parto</label>
+          <input type="text" name="hospital_parto" class="form-control"
+            value="{{ fd.get('hospital_parto') or (c.hospital_parto if c) or '' }}"
+            placeholder="Ex: Hospital Maternidade Exemplo">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ano de Referência</label>
+          <input type="number" name="ano_referencia" class="form-control"
+            value="{{ fd.get('ano_referencia') or (c.ano_referencia if c) or '' }}"
+            placeholder="Ex: 2025" min="2020" max="2099">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Status do Contrato</label>
+          <select name="contrato_status" class="form-select">
+            <option value="">— não informado —</option>
+            {% for opt in ['ASSINADO', 'ENVIADO', 'PENDENTE'] %}
+            <option value="{{ opt }}"
+              {% if (fd.get('contrato_status') or (c.contrato_status if c)) == opt %}selected{% endif %}>
+              {{ opt }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-9">
+          <label class="form-label">Serviços Adicionais / Observações</label>
+          <textarea name="observacoes" class="form-control" rows="2"
+            placeholder="Ex: consultoria amamentação, laser…">{{ fd.get('observacoes') or (c.observacoes if c) or '' }}</textarea>
+        </div>
+      </div>
+
+      <!-- ── PLANO DE CONTRATO ─────────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-file-earmark-medical me-2"></i>Plano de Contrato</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-5">
+          <label class="form-label">Selecionar Plano</label>
+          <select name="plano_id" id="plano_id" class="form-select">
+            <option value="">— Nenhum / Avulso —</option>
+            {% for pl in planos %}
+            <option value="{{ pl.id }}"
+              data-valor="{{ pl.valor }}"
+              data-itens='{{ pl.itens | map(attribute="servico") | list | tojson }}'
+              data-parcelas="{{ pl.parcelas_sem_taxa }}"
+              {% if (fd.get('plano_id')|string == pl.id|string) or (c and c.plano_id == pl.id) %}selected{% endif %}>
+              {{ pl.nome }} — {{ pl.valor|brl }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">
+            Ao selecionar um plano, o valor será preenchido automaticamente.
+            <a href="{{ url_for('planos.novo') }}" target="_blank" class="ms-1">
+              <i class="bi bi-plus-circle me-1"></i>Criar novo plano
+            </a>
+          </div>
+        </div>
+
+        <!-- Serviços do plano selecionado -->
+        <div class="col-md-7">
+          <div id="plano-info" style="display:none"
+               class="rounded p-3" style="background:var(--cm-bg);border:1px solid var(--cm-accent)">
+            <div class="text-muted small fw-bold mb-2">
+              <i class="bi bi-check-circle me-1" style="color:#1b5e20"></i>Serviços inclusos no plano
+            </div>
+            <ul id="plano-servicos" class="list-unstyled mb-0 small"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PAGAMENTO DO CONTRATO ──────────────────────────────────── -->
+      <p class="section-title"><i class="bi bi-cash-coin me-2"></i>Pagamento do Contrato</p>
+      <p class="text-muted small mb-3">Você pode dividir o pagamento em até 3 formas distintas.</p>
+
+      <div id="pagamentos-container">
+        {# Pré-popula com lançamentos existentes ou 1 linha vazia #}
+        {% for lx in (lancamentos if lancamentos else [none]) %}
+        {% set fa = lx.forma_pagamento if lx else 'pix' %}
+        {% set isCartao = formas_taxa.get(fa, 'nenhuma') != 'nenhuma' %}
+        <div class="pagamento-linha row g-2 mb-3 align-items-start">
+          <div class="col-md-2">
+            <label class="form-label">Valor (R$)</label>
+            <div class="input-group">
+              <span class="input-group-text">R$</span>
+              <input type="number" name="valor_contrato[]" class="form-control pg-valor"
+                     step="0.01" min="0" placeholder="0,00"
+                     value="{{ lx.valor if lx else '' }}">
+            </div>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Forma</label>
+            <select name="forma_pagamento[]" class="form-select pg-forma">
+              {% for v, lab in formas_ativas %}
+              <option value="{{ v }}" {% if fa == v %}selected{% endif %}>{{ lab }}</option>
+              {% endfor %}
+              {% if fa and fa not in (formas_ativas|map(attribute=0)|list) %}
+              <option value="{{ fa }}" selected>{{ formas_nomes.get(fa, fa) }} (bloqueada)</option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 pg-div-operadora"{% if not isCartao %} style="display:none"{% endif %}>
+            <label class="form-label">Operadora</label>
+            <select name="operadora[]" class="form-select pg-operadora">
+              {% set op_val = (lx.operadora if lx else operadora_padrao_hoje) %}
+              {% for v, lab in operadoras_ativas %}
+              <option value="{{ v }}" {% if op_val == v %}selected{% endif %}>{{ lab }}</option>
+              {% endfor %}
+              {% if op_val and op_val not in (operadoras_ativas|map(attribute=0)|list) %}
+              <option value="{{ op_val }}" selected>{{ operadoras_nomes.get(op_val, op_val) }} (bloqueada)</option>
+              {% endif %}
+            </select>
+          </div>
+          <div class="col-md-2 pg-div-parcelas"{% if formas_taxa.get(fa, 'nenhuma') != 'credito' %} style="display:none"{% endif %}>
+            <label class="form-label">Parcelas</label>
+            <select name="parcelas[]" class="form-select pg-parcelas">
+              {% set pa = (lx.parcelas or 1)|int if lx else 1 %}
+              <option value="1" {% if pa == 1 %}selected{% endif %}>1× à vista</option>
+              {% for n in range(2, 13) %}
+              <option value="{{ n }}" {% if pa == n %}selected{% endif %}>{{ n }}×</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Data Pagamento</label>
+            <input type="date" name="data_pagamento[]" class="form-control pg-data"
+                   value="{{ lx.data_pagamento.strftime('%Y-%m-%d') if lx and lx.data_pagamento else '' }}">
+            <div class="form-text">Em branco = pendente.</div>
+          </div>
+          <div class="col-auto d-flex align-items-end pb-4">
+            <button type="button" class="btn btn-outline-danger btn-sm btn-remover-pg" title="Remover">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div class="col-12">
+            <div class="pg-taxa-info rounded p-2" style="display:none;background:var(--cm-bg);border:1px solid var(--cm-accent);font-size:.84rem"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <button type="button" id="btn-add-pagamento" class="btn btn-outline-secondary btn-sm mb-4"
+        {% if lancamentos|length >= 3 %}disabled{% endif %}>
+        <i class="bi bi-plus-lg me-1"></i>Adicionar forma de pagamento
+      </button>
+
+      <!-- ── BOTÕES ─────────────────────────────────────────────────── -->
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary" id="btn-salvar-cliente">
+          <i class="bi bi-check-lg me-1"></i>Salvar
+        </button>
+        {% if c %}
+        <a href="{{ url_for('clientes.detail', id=c.id) }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+        {% else %}
+        <a href="{{ url_for('clientes.index') }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+        {% endif %}
+      </div>
+
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// getTaxaPct(forma, parcelas, operadora) já vem de static/js/taxas.js (carregado em base.html)
+
+{% if fichas_existentes is defined %}
+const FICHAS = {{ fichas_existentes | tojson }};
+const semAcento = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+{% endif %}
+document.getElementById('btn-salvar-cliente').closest('form').addEventListener('submit', function(ev) {
+  {% if fichas_existentes is defined %}
+  var ja = FICHAS[semAcento(document.querySelector('[name=nome]').value)];
+  if (ja && !confirm('Já existe uma ficha com este nome:\n\n' + ja.join('\n') +
+      '\n\nÉ uma nova gestação? OK = cadastrar uma nova ficha. Cancelar = voltar (para usar a ficha que já existe).')) {
+    ev.preventDefault();
+    return;
+  }
+  {% endif %}
+  var btn = document.getElementById('btn-salvar-cliente');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Salvando...';
+});
+
+// ── Seletor de plano ─────────────────────────────────────────────────────
+const elPlano    = document.getElementById('plano_id');
+const planoInfo  = document.getElementById('plano-info');
+const planoServs = document.getElementById('plano-servicos');
+
+function atualizarPlano() {
+  const opt = elPlano.options[elPlano.selectedIndex];
+  if (!opt || !opt.value) { planoInfo.style.display = 'none'; return; }
+  const valor = parseFloat(opt.dataset.valor) || 0;
+  const itens = JSON.parse(opt.dataset.itens || '[]');
+
+  // Preenche valor na primeira linha de pagamento
+  const primeiraLinha = document.querySelector('.pagamento-linha');
+  if (primeiraLinha && valor > 0) {
+    const elV = primeiraLinha.querySelector('.pg-valor');
+    if (elV) { elV.value = valor.toFixed(2); calcularLinha(primeiraLinha); }
+  }
+
+  planoServs.innerHTML = '';
+  itens.forEach(srv => {
+    const li = document.createElement('li');
+    li.innerHTML = `<i class="bi bi-dot" style="color:var(--cm-primary)"></i>${srv}`;
+    planoServs.appendChild(li);
+  });
+  planoInfo.style.display = itens.length ? 'block' : 'none';
+}
+
+elPlano.addEventListener('change', atualizarPlano);
+if (elPlano.value) atualizarPlano();
+
+// ── Calculadora de taxa por linha de pagamento ───────────────────────────
+const MAX_LINHAS = 3;
+
+function brlFmt(v) {
+  return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function calcularLinha(linha) {
+  const elV    = linha.querySelector('.pg-valor');
+  const elF    = linha.querySelector('.pg-forma');
+  const elOp   = linha.querySelector('.pg-operadora');
+  const elP    = linha.querySelector('.pg-parcelas');
+  const elD    = linha.querySelector('.pg-data');
+  const elTaxa = linha.querySelector('.pg-taxa-info');
+  const divOp  = linha.querySelector('.pg-div-operadora');
+  const divP   = linha.querySelector('.pg-div-parcelas');
+
+  const valor   = parseFloat(elV ? elV.value : 0) || 0;
+  const forma   = elF ? elF.value : 'pix';
+  const op      = elOp ? elOp.value : 'infinite';
+  const parc    = elP ? (parseInt(elP.value) || 1) : 1;
+  const isCartao = tipoTaxa(forma) !== 'nenhuma';
+
+  if (divOp) divOp.style.display = isCartao ? 'block' : 'none';
+  if (divP)  divP.style.display  = tipoTaxa(forma) === 'credito' ? 'block' : 'none';
+
+  if (!elTaxa) return;
+  if (valor <= 0) { elTaxa.style.display = 'none'; return; }
+
+  const taxaPct = getTaxaPct(forma, parc, op);
+  const taxaVal = Math.round(valor * taxaPct) / 100;
+  const liquido = Math.round((valor - taxaVal) * 100) / 100;
+  const nomeOp  = nomeOperadora(op);
+  const temData = elD && elD.value;
+  const statusHtml = temData
+    ? `<i class="bi bi-check-circle-fill text-success me-1"></i><span class="text-success">Recebido em ${elD.value.split('-').reverse().join('/')}</span>`
+    : `<i class="bi bi-clock text-warning me-1"></i><span class="text-warning">Pendente</span>`;
+
+  if (taxaPct > 0) {
+    elTaxa.innerHTML =
+      `<div class="d-flex justify-content-between">
+         <span>Taxa ${nomeOp} (${taxaPct.toFixed(2).replace('.', ',')}%)</span>
+         <strong class="text-danger">− ${brlFmt(taxaVal)}</strong>
+       </div>
+       <div class="d-flex justify-content-between border-top pt-1 mt-1">
+         <span class="fw-bold">Líquido (entra no caixa)</span>
+         <strong class="text-success">${brlFmt(liquido)}</strong>
+       </div>
+       <div class="border-top pt-1 mt-1 small">${statusHtml}</div>`;
+  } else {
+    elTaxa.innerHTML =
+      `<div class="d-flex justify-content-between">
+         <span><i class="bi bi-check-circle-fill text-success me-1"></i>Sem taxa — entra integral</span>
+         <strong class="text-success">${brlFmt(valor)}</strong>
+       </div>
+       <div class="border-top pt-1 mt-1 small">${statusHtml}</div>`;
+  }
+  elTaxa.style.display = 'block';
+}
+
+const tplLinhaPagamento = `
+<div class="pagamento-linha row g-2 mb-3 align-items-start">
+  <div class="col-md-2">
+    <label class="form-label">Valor (R$)</label>
+    <div class="input-group">
+      <span class="input-group-text">R$</span>
+      <input type="number" name="valor_contrato[]" class="form-control pg-valor" step="0.01" min="0" placeholder="0,00">
+    </div>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Forma</label>
+    <select name="forma_pagamento[]" class="form-select pg-forma">
+      {% for v, lab in formas_ativas %}<option value="{{ v }}">{{ lab }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2 pg-div-operadora" style="display:none">
+    <label class="form-label">Operadora</label>
+    <select name="operadora[]" class="form-select pg-operadora">
+      {% for v, lab in operadoras_ativas %}<option value="{{ v }}" {% if v == operadora_padrao_hoje %}selected{% endif %}>{{ lab }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2 pg-div-parcelas" style="display:none">
+    <label class="form-label">Parcelas</label>
+    <select name="parcelas[]" class="form-select pg-parcelas">
+      <option value="1">1× à vista</option>
+      ${Array.from({length:11},(_,i)=>`<option value="${i+2}">${i+2}×</option>`).join('')}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">Data Pagamento</label>
+    <input type="date" name="data_pagamento[]" class="form-control pg-data">
+    <div class="form-text">Em branco = pendente.</div>
+  </div>
+  <div class="col-auto d-flex align-items-end pb-4">
+    <button type="button" class="btn btn-outline-danger btn-sm btn-remover-pg" title="Remover">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="col-12">
+    <div class="pg-taxa-info rounded p-2" style="display:none;background:var(--cm-bg);border:1px solid var(--cm-accent);font-size:.84rem"></div>
+  </div>
+</div>`;
+
+function bindLinhaPagamento(linha) {
+  linha.querySelectorAll('.pg-valor, .pg-forma, .pg-operadora, .pg-parcelas, .pg-data').forEach(el => {
+    el.addEventListener('change', () => calcularLinha(linha));
+    el.addEventListener('input',  () => calcularLinha(linha));
+  });
+  linha.querySelector('.btn-remover-pg').addEventListener('click', () => {
+    if (document.querySelectorAll('#pagamentos-container .pagamento-linha').length > 1) {
+      linha.remove();
+      document.getElementById('btn-add-pagamento').disabled = false;
+    }
+  });
+  calcularLinha(linha);
+}
+
+function bindLinhasExistentes() {
+  const container = document.getElementById('pagamentos-container');
+  if (!container) return false;
+  container.querySelectorAll('.pagamento-linha').forEach(bindLinhaPagamento);
+  return true;
+}
+
+function initBtnAdicionar() {
+  const btnAdicionar = document.getElementById('btn-add-pagamento');
+  if (!btnAdicionar) return false;
+
+  btnAdicionar.addEventListener('click', function(e) {
+    e.preventDefault();
+    const container = document.getElementById('pagamentos-container');
+    if (!container) return;
+
+    const linhas = container.querySelectorAll('.pagamento-linha');
+    if (linhas.length >= MAX_LINHAS) {
+      alert('Limite de 3 formas de pagamento atingido');
+      return;
+    }
+
+    const div = document.createElement('div');
+    div.innerHTML = tplLinhaPagamento;
+    const linha = div.querySelector('.pagamento-linha');
+
+    if (!linha) {
+      console.error('Erro ao criar linha de pagamento');
+      return;
+    }
+
+    container.appendChild(linha);
+    bindLinhaPagamento(linha);
+
+    if (container.querySelectorAll('.pagamento-linha').length >= MAX_LINHAS) {
+      btnAdicionar.disabled = true;
+    }
+  });
+  return true;
+}
+
+// Inicializa listeners
+function initAll() {
+  bindLinhasExistentes();
+  initBtnAdicionar();
+}
+
+// Tenta inicializar logo (se DOM já está pronto)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAll);
+} else {
+  initAll();
+}
+</script>
+{% endblock %}

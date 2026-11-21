@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}ISS do Mês — {{ marca.nome }}{% endblock %}
+{% block page_title %}ISS do Mês{% endblock %}
+
+{% block extra_head %}
+<style>
+  @media print {
+    #sidebar, #topbar, #btn-toggle-sidebar, #sidebar-overlay, .no-print { display: none !important; }
+    #main { margin: 0 !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-3 no-print">
+  <div><label class="form-label small mb-0">Mês de emissão das notas</label>
+    <select name="mes" class="form-select form-select-sm">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == mes %}selected{% endif %}>{{ meses[i-1] }}</option>{% endfor %}</select></div>
+  <div><label class="form-label small mb-0">Ano</label>
+    <select name="ano" class="form-select form-select-sm">{% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></div>
+  <button class="btn btn-sm btn-primary">Ver</button>
+  <a href="{{ url_for('iss_mensal.exportar', mes=mes, ano=ano) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>Baixar planilha (CSV)</a>
+  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Imprimir</button>
+</form>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card"><div class="card-body py-2">
+    <div class="text-muted small">Notas emitidas em {{ meses[mes-1] }}/{{ ano }}</div><div class="fs-4 fw-bold">{{ tot.qtd }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body py-2">
+    <div class="text-muted small">Total das notas</div><div class="fs-4 fw-bold">{{ tot.bruto|brl }}</div></div></div></div>
+  <div class="col-md-3"><div class="card" style="border:2px solid var(--cm-primary-dark)"><div class="card-body py-2">
+    <div class="text-muted small">ISS a recolher ({{ (aliquota * 100)|round(1) }}%)</div><div class="fs-4 fw-bold" style="color:var(--cm-primary-dark)">{{ tot.iss|brl }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body py-2">
+    <div class="text-muted small">Vencimento da guia</div><div class="fs-4 fw-bold">{{ vencimento|data_br }}</div></div></div></div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">Notas fiscais emitidas em {{ meses[mes-1] }}/{{ ano }}</div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Nº</th><th>Sistema</th><th>Cliente</th><th>Emissão</th><th class="text-end">Valor da nota</th><th class="text-end">ISS</th></tr></thead>
+      <tbody>
+        {% for n in notas %}
+        <tr><td>{{ n.numero }}</td><td class="small text-muted">{{ n.sistema_emissao }}</td><td>{{ n.cliente.nome if n.cliente else '—' }}</td>
+            <td>{{ n.data_emissao|data_br }}</td><td class="text-end">{{ n.valor_bruto|brl }}</td><td class="text-end">{{ n.valor_iss|brl }}</td></tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-3">Nenhuma nota emitida neste mês.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if notas %}
+      <tfoot><tr class="fw-bold"><td colspan="4">Total</td><td class="text-end">{{ tot.bruto|brl }}</td><td class="text-end">{{ tot.iss|brl }}</td></tr></tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Resumo de {{ ano }}, mês a mês</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Mês</th><th class="text-end">Notas</th><th class="text-end">Total das notas</th><th class="text-end">ISS</th><th>Vencimento da guia</th></tr></thead>
+      <tbody>
+        {% for a in anual %}
+        <tr {% if a.mes == mes %}class="table-active"{% endif %}>
+          <td><a href="{{ url_for('iss_mensal.index', mes=a.mes, ano=ano) }}" class="text-decoration-none">{{ a.nome }}</a></td>
+          <td class="text-end">{{ a.qtd }}</td><td class="text-end">{{ a.bruto|brl }}</td><td class="text-end">{{ a.iss|brl }}</td><td>{{ a.vencimento|data_br }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-3">Nenhuma nota emitida em {{ ano }}.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="text-muted small mt-2">O ISS é somado sobre as notas emitidas no mês (sem as anuladas) e vence no dia 20 do mês seguinte. Notas que ainda não foram
+  cadastradas no sistema não aparecem aqui.</p>
+{% endblock %}

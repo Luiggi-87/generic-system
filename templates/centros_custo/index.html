@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Centros de Custo — {{ marca.nome }}{% endblock %}
+{% block page_title %}Centros de Custo{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3">
+  <a href="{{ url_for('centros_custo.novo') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg me-1"></i>Novo Centro de Custo
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Tipo</label>
+        <select name="tipo" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for v, l in tipos %}
+          <option value="{{ v }}" {% if tipo == v %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-search me-1"></i>Filtrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">{{ centros|length }} centro(s) de custo</div>
+  <div class="card-body p-0">
+    {% if centros %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr><th>Código</th><th>Nome</th><th>Tipo</th><th>Descrição</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for c in centros %}
+          <tr>
+            <td><code>{{ c.codigo }}</code></td>
+            <td class="fw-semibold">{{ c.nome }}</td>
+            <td>
+              {% if c.tipo == 'receita' %}<span class="badge bg-success">Receita</span>
+              {% elif c.tipo == 'despesa' %}<span class="badge bg-danger">Despesa</span>
+              {% else %}<span class="badge bg-secondary">Ambos</span>{% endif %}
+            </td>
+            <td class="text-muted small">{{ c.descricao or '—' }}</td>
+            <td>
+              {% if c.ativo %}<span class="badge bg-success">Ativo</span>
+              {% else %}<span class="badge bg-secondary">Inativo</span>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{{ url_for('centros_custo.editar', id=c.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                <form method="post" action="{{ url_for('centros_custo.excluir', id=c.id) }}" id="del-cc-{{ c.id }}">
+                  <button type="button" class="btn btn-sm btn-outline-danger"
+                    onclick="confirmar('Excluir {{ c.nome }}?','del-cc-{{ c.id }}')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-diagram-3" style="font-size:3rem;opacity:.2"></i>
+      <p class="mt-2">Nenhum centro de custo encontrado.</p>
+      <a href="{{ url_for('centros_custo.novo') }}" class="btn btn-primary">Cadastrar Centro de Custo</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

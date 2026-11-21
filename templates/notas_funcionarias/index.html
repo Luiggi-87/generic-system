@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Notas das Prestadoras de serviço — {{ marca.nome }}{% endblock %}
+{% block page_title %}Notas das Prestadoras de serviço{% endblock %}
+
+{% block content %}
+<form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-3">
+  <div><label class="form-label small mb-0">Mês do repasse</label>
+    <select name="mes" class="form-select form-select-sm">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == mes %}selected{% endif %}>{{ meses[i-1] }}</option>{% endfor %}</select></div>
+  <div><label class="form-label small mb-0">Ano</label>
+    <select name="ano" class="form-select form-select-sm">{% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></div>
+  <button class="btn btn-sm btn-primary">Ver</button>
+</form>
+
+{% set conferidas = linhas|selectattr('status', 'equalto', 'conferida')|list %}
+{% if conferidas %}
+<div class="alert alert-success d-flex align-items-center gap-2">
+  <i class="bi bi-patch-check-fill fs-5"></i>
+  <div><strong>{{ conferidas|length }} nota(s) conferida(s)</strong>: o valor bate com o repasse. Pode pagar
+    {{ conferidas|map(attribute='nome')|join(', ') }} — total <strong>{{ total_pagar|brl }}</strong>.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th>Prestadora de serviço</th><th class="text-end">Repasse a pagar</th><th>Nota fiscal</th><th class="text-end">Valor da nota</th><th>Situação</th><th></th></tr></thead>
+      <tbody>
+        {% for l in linhas %}{% set n = l.nota %}
+        <tr>
+          <td class="fw-semibold">{{ l.nome }}</td>
+          <td class="text-end">{{ l.repasse|brl }}</td>
+          <td>{% if n %}nº {{ n.numero }} <span class="text-muted small">· emitida {{ n.data_emissao|data_br }}<br>enviada {{ n.enviada_em.strftime('%d/%m/%Y %H:%M') }}{% if n.prestador_nome %} · {{ n.prestador_nome }}{% endif %}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-end">{% if n %}{{ n.valor|brl }}{% if n.valor_liquido and n.valor_liquido != n.valor %}<div class="small text-muted">líquido {{ n.valor_liquido|brl }}</div>{% endif %}{% else %}—{% endif %}</td>
+          <td>
+            {% if l.status == 'paga' %}<span class="badge bg-success">Paga em {{ n.pago_em|data_br }}</span>
+            {% elif l.status == 'conferida' %}<span class="badge bg-primary">Conferida — pode pagar</span>
+            {% elif l.status == 'divergente' %}<span class="badge bg-warning text-dark">Valor não confere</span>
+              <div class="small text-danger">diferença de {{ (n.valor - l.repasse)|abs|brl }}</div>
+            {% else %}<span class="badge bg-secondary">Aguardando nota</span>{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if n %}<a href="{{ url_for('notas_func.baixar_xml', id=n.id) }}" class="btn btn-sm btn-outline-secondary" title="Baixar XML"><i class="bi bi-download"></i></a>{% endif %}
+            {% if l.status == 'conferida' %}
+            <form method="post" action="{{ url_for('notas_func.pagar', id=n.id) }}" class="d-inline-flex gap-1 align-items-center">
+              <input type="date" name="pago_em" value="{{ hoje }}" class="form-control form-control-sm" style="width:140px">
+              <button class="btn btn-sm btn-success text-nowrap"><i class="bi bi-cash-coin me-1"></i>Registrar pagamento</button>
+            </form>
+            {% elif l.status == 'paga' %}
+            <form method="post" action="{{ url_for('notas_func.desfazer', id=n.id) }}" id="desf-{{ n.id }}" class="d-inline">
+              <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmar('Desmarcar o pagamento de {{ l.nome|e }}?', 'desf-{{ n.id }}')">Desfazer</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">Nenhum repasse a pagar em {{ meses[mes-1] }}/{{ ano }} (sem escala ou sem receita no mês).</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="text-muted small mt-2">O sistema confere o valor da nota com o repasse do mês (o mesmo do demonstrativo), com tolerância de R$ 0,05.
+  O pagamento é feito pela empresa; aqui ele é apenas registrado.</p>
+{% endblock %}

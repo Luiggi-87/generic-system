@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% set titulo = 'Editar Atendimento' if atendimento else 'Novo Atendimento' %}
+{% block title %}{{ titulo }} — {{ marca.nome }}{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% set fd = form_data %}
+{% set a = atendimento %}
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" id="form-atendimento">
+
+      <p class="section-title"><i class="bi bi-calendar-event me-2"></i>Dados do Atendimento</p>
+      <div class="row g-3 mb-4">
+        <div class="col-md-5">
+          <label class="form-label">Cliente *</label>
+          <select name="cliente_id" class="form-select" required>
+            <option value="">— Selecione —</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}"
+              {% if (fd.get('cliente_id') == c.id|string) or (a and a.cliente_id == c.id) %}selected{% endif %}>
+              {{ rotulo(c) }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Data *</label>
+          <input type="date" name="data_atendimento" class="form-control" required
+            value="{{ fd.get('data_atendimento') or (a.data_atendimento.strftime('%Y-%m-%d') if a and a.data_atendimento) or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Horário</label>
+          <input type="time" name="hora_atendimento" class="form-control"
+            value="{{ fd.get('hora_atendimento') or (a.hora_atendimento if a) or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Tipo</label>
+          <select name="tipo" class="form-select">
+            {% for v, l in tipos %}
+            <option value="{{ v }}"
+              {% if (fd.get('tipo') or (a.tipo if a) or 'consulta') == v %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Profissional / EO</label>
+          <input type="text" name="profissional" class="form-control"
+            placeholder="Nome da enfermeira obstétrica"
+            value="{{ fd.get('profissional') or (a.profissional if a) or '' }}">
+        </div>
+        {% if current_user.eh_admin %}
+        <div class="col-md-4">
+          <label class="form-label">Valor vai para</label>
+          <select name="funcionario_id" class="form-select">
+            <option value="">Rateio da folha (todas)</option>
+            {% for f in funcionarios %}
+            <option value="{{ f.id }}"
+              {% if (fd.get('funcionario_id') == f.id|string) or (a and a.funcionario_id == f.id) %}selected{% endif %}>Somente {{ f.nome }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Direcionar: o valor deste atendimento é só dessa prestadora de serviço, fora do rateio.</div>
+        </div>
+        {% endif %}
+        <div class="col-md-8">
+          <label class="form-label">Observações</label>
+          <textarea name="observacoes" class="form-control" rows="2">{{ fd.get('observacoes') or (a.observacoes if a) or '' }}</textarea>
+        </div>
+      </div>
+
+      <p class="section-title"><i class="bi bi-clipboard2-pulse me-2"></i>Procedimentos</p>
+      <div id="itens-container">
+        {% if a and a.itens %}
+          {% for item in a.itens %}
+          <div class="row g-2 mb-2 item-linha">
+            <div class="col-md-6">
+              <select name="procedimento_id[]" class="form-select proc-select">
+                <option value="">— Selecione o procedimento —</option>
+                {% for p in procedimentos %}
+                <option value="{{ p.id }}" data-valor="{{ p.valor_padrao }}"
+                  {% if item.procedimento_id == p.id %}selected{% endif %}>
+                  {{ p.nome }} — {{ p.valor_padrao|brl }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <input type="number" step="0.01" min="0.01" name="quantidade[]" class="form-control" placeholder="Qtd" value="{{ item.quantidade }}">
+            </div>
+            <div class="col-md-3">
+              <input type="number" step="0.01" min="0" name="valor_unitario[]" class="form-control" placeholder="Valor unit." value="{{ item.valor_unitario }}">
+            </div>
+            <div class="col-md-1">
+              <button type="button" class="btn btn-outline-danger w-100 btn-remover"><i class="bi bi-x-lg"></i></button>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="row g-2 mb-2 item-linha">
+            <div class="col-md-6">
+              <select name="procedimento_id[]" class="form-select proc-select">
+                <option value="">— Selecione o procedimento —</option>
+                {% for p in procedimentos %}
+                <option value="{{ p.id }}" data-valor="{{ p.valor_padrao }}">
+                  {{ p.nome }} — {{ p.valor_padrao|brl }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <input type="number" step="0.01" min="0.01" name="quantidade[]" class="form-control" placeholder="Qtd" value="1">
+            </div>
+            <div class="col-md-3">
+              <input type="number" step="0.01" min="0" name="valor_unitario[]" class="form-control" placeholder="Valor unit.">
+            </div>
+            <div class="col-md-1">
+              <button type="button" class="btn btn-outline-danger w-100 btn-remover"><i class="bi bi-x-lg"></i></button>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <button type="button" id="btn-add-item" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-plus-lg me-1"></i>Adicionar Procedimento
+        </button>
+        <div class="ms-auto">
+          <strong>Total estimado: </strong>
+          <span id="total-valor" class="fw-bold" style="color:var(--cm-primary)">R$ 0,00</span>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        <a href="{{ url_for('atendimentos.index') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Template linha procedimento -->
+<template id="tpl-item">
+  <div class="row g-2 mb-2 item-linha">
+    <div class="col-md-6">
+      <select name="procedimento_id[]" class="form-select proc-select">
+        <option value="">— Selecione o procedimento —</option>
+        {% for p in procedimentos %}
+        <option value="{{ p.id }}" data-valor="{{ p.valor_padrao }}">
+          {{ p.nome }} — {{ p.valor_padrao|brl }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <input type="number" step="0.01" min="0.01" name="quantidade[]" class="form-control" placeholder="Qtd" value="1">
+    </div>
+    <div class="col-md-3">
+      <input type="number" step="0.01" min="0" name="valor_unitario[]" class="form-control" placeholder="Valor unit.">
+    </div>
+    <div class="col-md-1">
+      <button type="button" class="btn btn-outline-danger w-100 btn-remover"><i class="bi bi-x-lg"></i></button>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const container = document.getElementById('itens-container');
+const tpl = document.getElementById('tpl-item');
+const totalSpan = document.getElementById('total-valor');
+
+function calcTotal() {
+  let total = 0;
+  container.querySelectorAll('.item-linha').forEach(linha => {
+    const qtd = parseFloat(linha.querySelector('[name="quantidade[]"]').value) || 0;
+    const val = parseFloat(linha.querySelector('[name="valor_unitario[]"]').value) || 0;
+    total += qtd * val;
+  });
+  totalSpan.textContent = 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits:2});
+}
+
+function bindLinha(linha) {
+  linha.querySelector('.btn-remover').addEventListener('click', () => {
+    if (container.querySelectorAll('.item-linha').length > 1) {
+      linha.remove(); calcTotal();
+    }
+  });
+  linha.querySelector('.proc-select').addEventListener('change', function() {
+    const opt = this.selectedOptions[0];
+    const valorInput = linha.querySelector('[name="valor_unitario[]"]');
+    if (opt && opt.dataset.valor) valorInput.value = opt.dataset.valor;
+    calcTotal();
+  });
+  linha.querySelector('[name="quantidade[]"]').addEventListener('input', calcTotal);
+  linha.querySelector('[name="valor_unitario[]"]').addEventListener('input', calcTotal);
+}
+
+container.querySelectorAll('.item-linha').forEach(bindLinha);
+calcTotal();
+
+document.getElementById('btn-add-item').addEventListener('click', () => {
+  const clone = tpl.content.cloneNode(true);
+  const linha = clone.querySelector('.item-linha');
+  container.appendChild(clone);
+  bindLinha(container.lastElementChild);
+});
+</script>
+{% endblock %}
