@@ -14,6 +14,9 @@ for tentativa in range(1, 6):
     try:
         with app.app_context():
             db.create_all()
+        from run_migration import run as aplicar_migracoes
+        aplicar_migracoes(app)
+        with app.app_context():
             from app import seed_dados_iniciais, seed_planos, seed_funcionarios, seed_usuario, seed_formas
             seed_formas()
             seed_dados_iniciais()

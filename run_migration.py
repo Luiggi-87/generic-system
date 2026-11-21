@@ -5,7 +5,6 @@ Rode UMA VEZ após atualizar o código:
     python run_migration.py
 """
 
-from app import app
 from models import db
 from sqlalchemy import text
 from servicos_financeiros import (
@@ -53,8 +52,11 @@ MIGRATIONS = [
 ]
 
 
-def run():
-    with app.app_context():
+def run(flask_app=None):
+    """Aplica as migrações. Chamada no início do sistema (app.py e wsgi.py) ou pelo terminal."""
+    if flask_app is None:
+        from app import app as flask_app
+    with flask_app.app_context():
         with db.engine.connect() as conn:
             for sql in MIGRATIONS:
                 try:
@@ -62,11 +64,13 @@ def run():
                     conn.commit()
                     print(f"OK  {sql[:60]}...")
                 except Exception as e:
-                    print(f"SKIP (já existe?) — {e}")
+                    # coluna que já existe é o caso normal depois da 1ª execução: não polui o log
+                    if 'duplicate column' not in str(e).lower():
+                        print(f"ERRO na migração — {sql[:60]}... — {e}")
         db.create_all()  # tabelas novas (ex.: formas_pagamento)
         seed_formas_pagamento()
         corrigir_dados()
-        print("\nMigração concluída.")
+        print("Migração concluída.")
 
 
 def corrigir_dados():

@@ -2,12 +2,11 @@ from flask import Flask, render_template, redirect, url_for, request, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from sqlalchemy import func
+from licenca import licenca_instalada, instalar as instalar_licenca
 from models import db, Usuario, Cliente, Atendimento, Lancamento, CentroCusto, Procedimento, Material, Funcionario, Plano, ItemPlano
 from datetime import date, datetime
-import hashlib
 import hmac
 import os
-import subprocess
 import time
 
 # O servidor roda em UTC: sem isto, depois das 21h (Brasília) date.today() já seria o dia seguinte
@@ -66,10 +65,6 @@ app.config['REMEMBER_COOKIE_HTTPONLY'] = True
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gestao_clinica.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Lido do ambiente (definido no arquivo WSGI do PythonAnywhere, nunca commitado).
-# Sem essa variável configurada, a rota /deploy-webhook fica desativada.
-DEPLOY_WEBHOOK_SECRET = os.environ.get('DEPLOY_WEBHOOK_SECRET')
 
 # Idem, para a rota /api/clientes (relatório somente-leitura).
 REPORT_API_KEY = os.environ.get('REPORT_API_KEY')
@@ -223,9 +218,33 @@ def format_data_br(value):
 
 
 @app.before_request
+def exigir_licenca():
+    """Sem licença válida nesta instalação, só a tela de licença fica disponível."""
+    if request.endpoint in (None, 'licenca', 'static'):
+        return None
+    ok, _ = licenca_instalada()
+    if not ok:
+        return redirect(url_for('licenca'))
+
+
+@app.route('/licenca', methods=['GET', 'POST'])
+def licenca():
+    """Instala a licença enviada pelo fornecedor (texto colado pelo cliente)."""
+    if request.method == 'POST':
+        ok, resultado = instalar_licenca(request.form.get('chave', ''))
+        if ok:
+            flash('Licença instalada com sucesso.', 'success')
+            return redirect(url_for('login'))
+        flash(resultado, 'danger')
+    ok, dados = licenca_instalada()
+    return render_template('licenca.html', licenca_ok=ok, licenca_dados=dados if ok else None,
+                           motivo=None if ok else dados)
+
+
+@app.before_request
 def require_login():
     """Redireciona para login em qualquer rota não-pública."""
-    public = {'login', 'static', 'deploy_webhook', 'api_clientes', 'api_lancamentos'}
+    public = {'login', 'static', 'api_lancamentos', 'licenca'}
     # a API de leitura se protege sozinha, por chave (routes/api_leitura.py)
     if (request.endpoint and request.endpoint not in public and request.blueprint != 'api_leitura'
             and not current_user.is_authenticated):
@@ -291,61 +310,6 @@ def cabecalhos_de_seguranca(resp):
     resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     resp.headers.setdefault('Referrer-Policy', 'same-origin')
     return resp
-
-
-@app.route('/deploy-webhook', methods=['POST'])
-def deploy_webhook():
-    """Disparado pelo GitHub a cada push. Valida a assinatura HMAC e roda deploy.sh."""
-    if not DEPLOY_WEBHOOK_SECRET:
-        return 'Webhook não configurado', 503
-
-    signature = request.headers.get('X-Hub-Signature-256', '')
-    esperado = 'sha256=' + hmac.new(
-        DEPLOY_WEBHOOK_SECRET.encode(), request.data, hashlib.sha256
-    ).hexdigest()
-    if not hmac.compare_digest(esperado, signature):
-        return 'Assinatura inválida', 403
-
-    payload = request.get_json(silent=True) or {}
-    if payload.get('ref') != 'refs/heads/main':
-        return 'Ignorado (não é a branch main)', 200
-
-    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deploy.sh')
-    try:
-        resultado = subprocess.run(
-            ['bash', script], capture_output=True, text=True, timeout=120
-        )
-    except subprocess.TimeoutExpired:
-        return 'Deploy excedeu o tempo limite', 500
-    except OSError as e:
-        return f'Erro ao executar deploy.sh: {e}', 500
-
-    if resultado.returncode != 0:
-        return f'Deploy falhou:\n{resultado.stdout}\n{resultado.stderr}', 500
-
-    return 'Deploy concluído', 200
-
-
-@app.route('/api/clientes', methods=['GET'])
-def api_clientes():
-    """Relatório somente-leitura de clientes, protegido por chave de API.
-    Não expõe arquivos, consoles nem configurações — só estes campos."""
-    chave = request.headers.get('X-API-Key', '')
-    if not REPORT_API_KEY or not hmac.compare_digest(chave, REPORT_API_KEY):
-        return jsonify({'erro': 'não autorizado'}), 403
-
-    clientes = Cliente.query.order_by(Cliente.nome).all()
-    return jsonify([{
-        'nome': c.nome,
-        'cpf': c.cpf,
-        'id': c.id,
-        'data_parto': c.data_parto.isoformat() if c.data_parto else None,
-        'tipo_parto': c.tipo_parto,
-        'contrato_status': c.contrato_status,
-        'data_prevista_parto': c.data_prevista_parto.isoformat() if c.data_prevista_parto else None,
-        'ano_referencia': c.ano_referencia,
-        'status': c.status,
-    } for c in clientes])
 
 
 @app.route('/api/lancamentos', methods=['GET'])
@@ -642,7 +606,10 @@ def seed_formas():
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        db.create_all()  # tabelas novas primeiro: em instalação nova, as migrações precisam delas
+    from run_migration import run as aplicar_migracoes
+    aplicar_migracoes(app)  # atualiza o banco ao iniciar: o cliente não precisa rodar nada à mão
+    with app.app_context():
         seed_formas()
         seed_dados_iniciais()
         seed_planos()

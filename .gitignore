@@ -1,6 +1,5 @@
-# Banco de dados — nunca versionar (dados reais de clientes + risco de
-# um push acidental sobrescrever o banco de produção no PythonAnywhere)
-instance/*.db
+# Pasta de instância: banco, licença instalada e chave secreta de cada instalação — nunca versionar
+instance/
 instance/*.db-journal
 
 # Bytecode Python
